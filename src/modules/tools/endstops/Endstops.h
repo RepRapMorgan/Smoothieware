@@ -39,6 +39,7 @@ class Endstops : public Module{
         bool debounced_get(Pin *pin);
         void process_home_command(Gcode* gcode);
         void set_homing_offset(Gcode* gcode);
+        void set_relative_homing_offset(Gcode* gcode);
         uint32_t read_endstops(uint32_t dummy);
         void handle_park(Gcode * gcode);
 

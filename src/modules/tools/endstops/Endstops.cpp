@@ -897,6 +897,56 @@ void Endstops::set_homing_offset(Gcode *gcode)
     gcode->stream->printf("Homing Offset: X %5.3f Y %5.3f Z %5.3f will take effect next home\n", homing_axis[X_AXIS].home_offset, homing_axis[Y_AXIS].home_offset, homing_axis[Z_AXIS].home_offset);
 }
 
+void Endstops::set_relative_homing_offset(Gcode *gcode)
+{
+    // Similar to M306 but sets Homing offsets relatively based on current position
+    // Can be used in on the fly XYZ calibration during printing.
+    float cartesian[3];
+    std::vector<std::pair<char, float>> params;
+
+    THEKERNEL->robot->get_axis_position(cartesian);    // get actual position from robot
+
+    if (gcode->has_letter('X')) {
+        homing_axis[X_AXIS].home_offset -= gcode->get_value('X');
+        params.push_back({'X', gcode->get_value('X')});
+    }
+
+    if (gcode->has_letter('Y')) {
+        homing_axis[Y_AXIS].home_offset -= gcode->get_value('Y');
+        params.push_back({'Y', gcode->get_value('Y')});
+    }
+
+    if (gcode->has_letter('Z')) {
+        homing_axis[Z_AXIS].home_offset -= gcode->get_value('Z');
+        params.push_back({'Z', gcode->get_value('Z')});
+    }
+
+
+        // Do an axis move in the magnitude of the calibration value, without changing the current actual position
+    if(!params.empty()) {
+        params.insert(params.begin(), {'G', 0});
+        // use X slow rate to move, Z should have a max safe speed set in firmware
+        params.push_back({'F', homing_axis[X_AXIS].slow_rate * 60.0F});
+        char gcode_buf[64];
+        append_parameters(gcode_buf, params, sizeof(gcode_buf));
+        Gcode gc(gcode_buf, &(StreamOutput::NullStream));
+        THEKERNEL->robot->push_state();
+        THEKERNEL->robot->absolute_mode = false; // needs to be relative mode
+        THEKERNEL->robot->on_gcode_received(&gc); // send to robot directly
+        // Wait for above to finish
+        THECONVEYOR->wait_for_idle();
+        THEKERNEL->robot->pop_state();
+    }
+
+
+    for (int i = X_AXIS; i <= Z_AXIS; i++) {  // Reset actual position to the initial values.
+      if (gcode->has_letter('X'+i))
+        THEKERNEL->robot->reset_axis_position(cartesian[i], i);
+    }
+
+    gcode->stream->printf("Homing Offset: X %5.3f Y %5.3f Z %5.3f\n", homing_axis[X_AXIS].home_offset, homing_axis[Y_AXIS].home_offset, homing_axis[Z_AXIS].home_offset);
+}
+
 void Endstops::handle_park(Gcode * gcode)
 {
     // TODO: spec says if XYZ specified move to them first then move to MCS of specifed axis
@@ -1035,7 +1085,12 @@ void Endstops::on_gcode_received(void *argument)
             case 306: // set homing offset based on current position
                 if(is_rdelta) return; // RotaryDeltaCalibration module will handle this
 
-                set_homing_offset(gcode);
+                if (gcode->subcode == 1){
+                    set_relative_homing_offset(gcode);
+                }
+                else {
+                    set_homing_offset(gcode);
+                }
                 break;
 
             case 500: // save settings
