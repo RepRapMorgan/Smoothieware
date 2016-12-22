@@ -18,7 +18,7 @@ public:
     ~ZGridStrategy();
     bool handleGcode(Gcode* gcode);
     bool handleConfig();
-    float getZOffset(float x, float y);
+    //float getZOffset(float x, float y);
 
 private:
     void homexyz();
@@ -27,6 +27,10 @@ private:
     void next_cal(void);
     float getZhomeoffset();
     void setZoffset(float zval);
+    float probeDistance( float x, float y);
+    float zsteps_to_mm(float steps);
+
+    void doCompensation(float *target, bool inverse);
 
     void setAdjustFunction(bool);
     bool doProbing(StreamOutput *stream);

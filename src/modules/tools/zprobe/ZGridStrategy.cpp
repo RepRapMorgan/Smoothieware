@@ -136,7 +136,9 @@
 
 #define probe_points                 (this->numRows * this->numCols)
 
-
+#define STEPPER THEKERNEL->robot->actuators
+#define STEPS_PER_MM(a) (STEPPER[a]->get_steps_per_mm())
+#define Z_STEPS_PER_MM STEPS_PER_MM(Z_AXIS)
 
 ZGridStrategy::ZGridStrategy(ZProbe *zprobe) : LevelingStrategy(zprobe)
 {
@@ -238,7 +240,7 @@ bool ZGridStrategy::handleGcode(Gcode *gcode)
 
         } else if( gcode->g == 32 ) { //run probe
             // first wait for an empty queue i.e. no moves left
-            THEKERNEL->conveyor->wait_for_empty_queue();
+            THEKERNEL->conveyor->wait_for_idle();
 
             this->setAdjustFunction(false); // Disable leveling code
             if(!doProbing(gcode->stream)) {
@@ -253,8 +255,7 @@ bool ZGridStrategy::handleGcode(Gcode *gcode)
     } else if(gcode->has_m) {
         switch( gcode->m ) {
 
-            // manual bed ZGrid calbration: M370 - M375
-            // M370: Clear current ZGrid for calibration, and move to first position
+            // M370: Clear current ZGrid
             case 370: {
                 this->setAdjustFunction(false); // Disable leveling code
                 this->cal[Z_AXIS] = std::get<Z_AXIS>(this->probe_offsets) + zprobe->getProbeHeight();
@@ -274,44 +275,6 @@ bool ZGridStrategy::handleGcode(Gcode *gcode)
 
                 this->cal[X_AXIS] = 0.0f;                                              // Clear calibration position
                 this->cal[Y_AXIS] = 0.0f;
-                this->in_cal = true;                                         // In calbration mode
-
-            }
-            return true;
-            // M371: Move to next manual calibration position
-            case 371: {
-                if (in_cal){
-                    this->move(this->cal, slow_rate);
-                    this->next_cal();
-                }
-
-            }
-            return true;
-            // M372: save current position in ZGrid, and move to next calibration position
-            case 372: {
-                if (in_cal){
-                    float cartesian[3];
-                    int pindex = 0;
-
-                    THEKERNEL->robot->get_axis_position(cartesian);         // get actual position from robot
-
-                    pindex = int(cartesian[X_AXIS]/this->bed_div_x + 0.25)*this->numCols + int(cartesian[Y_AXIS]/this->bed_div_y + 0.25);
-
-                    this->move(this->cal, slow_rate);                       // move to the next position
-                    this->next_cal();                                       // to not cause damage to machine due to Z-offset
-
-                    this->pData[pindex] = cartesian[Z_AXIS];  // save the offset
-
-                }
-            }
-            return true;
-            // M373: finalize calibration
-            case 373: {
-                 // normalize the grid
-                 this->normalize_grid_2home();
-
-                 this->in_cal = false;
-                 this->setAdjustFunction(true); // Enable leveling code
 
             }
             return true;
@@ -352,19 +315,6 @@ bool ZGridStrategy::handleGcode(Gcode *gcode)
             }
             return true;
 
-/*          case 376: { // Check grid value calculations: For debug only.
-                float target[3];
-
-                for(char letter = 'X'; letter <= 'Z'; letter++) {
-                    if( gcode->has_letter(letter) ) {
-                         target[letter - 'X'] = gcode->get_value(letter);
-                    }
-                }
-                gcode->stream->printf(" Z0 %1.3f\n",getZOffset(target[0], target[1]));
-
-            }
-            return true;
-*/
             case 565: { // M565: Set Z probe offsets
                 float x= 0, y= 0, z= 0;
                 if(gcode->has_letter('X')) x = gcode->get_value('X');
@@ -522,7 +472,7 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
         int pindex = 0;
 
         // z = z home offset - probed distance
-        float z = getZhomeoffset() -zprobe->probeDistance((this->cal[X_AXIS] + this->cal_offset_x)-std::get<X_AXIS>(this->probe_offsets),
+        float z = getZhomeoffset() - this->probeDistance((this->cal[X_AXIS] + this->cal_offset_x)-std::get<X_AXIS>(this->probe_offsets),
                                                (this->cal[Y_AXIS] + this->cal_offset_y)-std::get<Y_AXIS>(this->probe_offsets));
 
         pindex = int(this->cal[X_AXIS]/this->bed_div_x + 0.25)*this->numCols + int(this->cal[Y_AXIS]/this->bed_div_y + 0.25);
@@ -556,13 +506,15 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
 
 void ZGridStrategy::normalize_grid_2home()
 {
-    void* rd;
+    float* rd;
     float home_Z_comp;
 
     bool ok = PublicData::get_value( endstops_checksum, home_offset_checksum, &rd );
 
     if (ok) {
-       home_Z_comp = this->getZOffset(((float*)rd)[0],((float*)rd)[1]);   // find the Z compensation at home position
+       this->doCompensation( rd, 0);
+       home_Z_comp = rd[2];
+       //home_Z_comp = this->getZOffset(((float*)rd)[0],((float*)rd)[1]);   // find the Z compensation at home position
     }
     else {
        home_Z_comp = 0;
@@ -651,34 +603,70 @@ void ZGridStrategy::next_cal(void){
 //}
 
 
+
+
+/*void ZGridStrategy::setAdjustFunction(bool on)
+{
+    if(on) {
+        // set the compensationTransform in robot
+        //THEROBOT->compensationTransform = [this](float target[3]) { target[2] += this->getZOffset(target[0], target[1]); };
+        //THEROBOT->compensationTransform= [this](float *target, bool inverse) { if(inverse) target[2] -= this->plane->getz(target[0], target[1]); else target[2] += this->plane->getz(target[0], target[1]); };
+        THEROBOT->compensationTransform= [this](float *target, bool inverse) { if(inverse) target[2] -= this->getZOffset(target[0], target[1]); else target[2] += this->getZOffset(target[0], target[1]); };
+
+    }else{
+        // clear it
+        THEROBOT->compensationTransform= nullptr;
+    }
+}*/
+
 void ZGridStrategy::setAdjustFunction(bool on)
 {
     if(on) {
         // set the compensationTransform in robot
-        THEKERNEL->robot->compensationTransform= [this](float target[3]) { target[2] += this->getZOffset(target[0], target[1]); };
-    }else{
+        using std::placeholders::_1;
+        using std::placeholders::_2;
+        THEROBOT->compensationTransform = std::bind(&ZGridStrategy::doCompensation, this, _1, _2); // [this](float *target, bool inverse) { doCompensation(target, inverse); };
+    } else {
         // clear it
-        THEKERNEL->robot->compensationTransform= nullptr;
+        THEROBOT->compensationTransform = nullptr;
     }
 }
 
+/*void ZGridStrategy::doCompensation(float *target, bool inverse)
+{
+    // Adjust print surface height by linear interpolation over the bed_level array.
+    int half = (grid_size - 1) / 2;
+    float grid_x = std::max(0.001F - half, std::min(half - 0.001F, target[X_AXIS] / AUTO_BED_LEVELING_GRID_X));
+    float grid_y = std::max(0.001F - half, std::min(half - 0.001F, target[Y_AXIS] / AUTO_BED_LEVELING_GRID_Y));
+    int floor_x = floorf(grid_x);
+    int floor_y = floorf(grid_y);
+    float ratio_x = grid_x - floor_x;
+    float ratio_y = grid_y - floor_y;
+    float z1 = grid[(floor_x + half) + ((floor_y + half) * grid_size)];
+    float z2 = grid[(floor_x + half) + ((floor_y + half + 1) * grid_size)];
+    float z3 = grid[(floor_x + half + 1) + ((floor_y + half) * grid_size)];
+    float z4 = grid[(floor_x + half + 1) + ((floor_y + half + 1) * grid_size)];
+    float left = (1 - ratio_y) * z1 + ratio_y * z2;
+    float right = (1 - ratio_y) * z3 + ratio_y * z4;
+    float offset = (1 - ratio_x) * left + ratio_x * right;
+
+    if(inverse)
+        target[Z_AXIS] -= offset;
+    else
+        target[Z_AXIS] += offset;
+
+}
+*/
 
 // find the Z offset for the point on the plane at x, y
-float ZGridStrategy::getZOffset(float X, float Y)
+void ZGridStrategy::doCompensation(float  *target, bool inverse)
 {
     int xIndex2, yIndex2;
 
-    // Subtract calibration offsets as applicable
-    X -= this->cal_offset_x;
-    Y -= this->cal_offset_y;
-
-    float xdiff = X / this->bed_div_x;
-    float ydiff = Y / this->bed_div_y;
+    float xdiff = (target[X_AXIS] - this->cal_offset_x) / this->bed_div_x;
+    float ydiff = (target[Y_AXIS] - this->cal_offset_y) / this->bed_div_y;
 
     float dCartX1, dCartX2;
-
-    // Get floor of xdiff.  Note that (int) of a negative number is its
-    // ceiling, not its floor.
 
     int xIndex = (int)(floorf(xdiff));	// Get the current sector (X)
     int yIndex = (int)(floorf(ydiff));	// Get the current sector (Y)
@@ -699,10 +687,23 @@ float ZGridStrategy::getZOffset(float X, float Y)
     dCartX1 = (1-xdiff) * this->pData[(xIndex*this->numCols)+yIndex] + (xdiff) * this->pData[(xIndex2)*this->numCols+yIndex];
     dCartX2 = (1-xdiff) * this->pData[(xIndex*this->numCols)+yIndex2] + (xdiff) * this->pData[(xIndex2)*this->numCols+yIndex2];
 
-    return ydiff * dCartX2 + (1-ydiff) * dCartX1;    // Calculated Z-delta
-
+    if(inverse)
+        target[Z_AXIS] -= ydiff * dCartX2 + (1-ydiff) * dCartX1;
+    else
+        target[Z_AXIS] += ydiff * dCartX2 + (1-ydiff) * dCartX1;
 }
 
+float ZGridStrategy::probeDistance(float x, float y)
+{
+    float s;
+    if(!zprobe->doProbeAt(s, x, y)) return NAN;
+    return s;
+}
+
+/*float ZGridStrategy::zsteps_to_mm(float steps)
+{
+    return steps / Z_STEPS_PER_MM;
+}*/
 // parse a "X,Y,Z" string return x,y,z tuple
 std::tuple<float, float, float> ZGridStrategy::parseXYZ(const char *str)
 {
