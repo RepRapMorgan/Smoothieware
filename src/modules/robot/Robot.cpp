@@ -421,10 +421,18 @@ void Robot::on_gcode_received(void *argument)
             case 1:  motion_mode = LINEAR;  break;
             case 2:  motion_mode = CW_ARC;  break;
             case 3:  motion_mode = CCW_ARC; break;
-            case 4: { // G4 pause
+            case 4: { // G4 Dwell
                 uint32_t delay_ms = 0;
                 if (gcode->has_letter('P')) {
-                    delay_ms = gcode->get_int('P');
+                    if(THEKERNEL->is_grbl_mode()) {
+                        // in grbl mode (and linuxcnc) P is decimal seconds
+                        float f= gcode->get_value('P');
+                        delay_ms= f * 1000.0F;
+
+                    }else{
+                        // in reprap P is milliseconds, they always have to be different!
+                        delay_ms = gcode->get_int('P');
+                    }
                 }
                 if (gcode->has_letter('S')) {
                     delay_ms += gcode->get_int('S') * 1000;
@@ -1168,7 +1176,7 @@ bool Robot::append_milestone(const float target[], float rate_mm_s)
         }
         if(auxilliary_move) {
             // for E only moves we need to use the scaled E to calculate the distance
-            sos += pow(actuator_pos[i] - actuators[i]->get_last_milestone(), 2);
+            sos += powf(actuator_pos[i] - actuators[i]->get_last_milestone(), 2);
         }
     }
     if(auxilliary_move) {
