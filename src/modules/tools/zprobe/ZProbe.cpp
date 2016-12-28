@@ -233,7 +233,8 @@ bool ZProbe::run_probe_return(float& mm, float feedrate, float max_dist, bool re
     }
 
     // absolute move back to saved starting position
-    coordinated_move(save_pos[0], save_pos[1], save_pos[2], fr, false);
+    // Move should have been in Z only: Thus move only in Z
+    coordinated_move(NAN, NAN, save_pos[2], fr, false);
 
     return ok;
 }

@@ -411,12 +411,12 @@ bool ZGridStrategy::loadGrid(std::string args)
 
 float ZGridStrategy::getZhomeoffset()
 {
-    void* rd;
+    float rd[3];
 
-    bool ok = PublicData::get_value( endstops_checksum, home_offset_checksum, &rd );
+    bool ok = PublicData::get_value( endstops_checksum, home_offset_checksum, rd );
 
     if (ok) {
-      return ((float*)rd)[2];
+      return rd[2];
     }
 
     return 0;
@@ -447,11 +447,7 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
     }
 
     if (this->wait_for_probe){
-
-        this->cal[X_AXIS] = this->probe_x;  //bed_x/2.0f;
-        this->cal[Y_AXIS] = this->probe_y;  //bed_y/2.0f;
-        this->cal[Z_AXIS] = this->probe_z;  //bed_z/2.0f;           // Position head for probe attachment
-        this->move(this->cal, slow_rate);                           // Move to probe attachment point
+        zprobe->coordinated_move(this->probe_x, this->probe_y, this->probe_z, slow_rate); // use specified feedrate (mm/sec)
 
         stream->printf("*** Ensure probe is attached and press probe when done ***\n");
 
@@ -462,17 +458,38 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
 
     this->in_cal = true;                         // In calbration mode
 
+    // Find bed position first so as to not run into troubles later.
+    // This can be fast, the accurate probe for this position will happen during the run
+
+    float zinit = getZhomeoffset();
+    float initmm;
+    zprobe->run_probe_return(initmm, slow_rate);
+
+  //** DEBUG **
+    stream->printf("zhomeoffset initial = %f\n",zinit);
+
+    zinit -= this->probe_z - (initmm - std::get<Y_AXIS>(this->probe_offsets));
+
+    //this->setZoffset(this->getZhomeoffset() + (this->probe_z - (zinit - std::get<Y_AXIS>(this->probe_offsets))));
+
+    //** DEBUG **
+    stream->printf("zinit = %f. zhomeoffset = %f\n",zinit, getZhomeoffset());
+
+
     this->cal[X_AXIS] = 0.0f;                    // Clear calibration position
     this->cal[Y_AXIS] = 0.0f;
     this->cal[Z_AXIS] = std::get<Z_AXIS>(this->probe_offsets) + zprobe->getProbeHeight();
-
-    this->move(this->cal, slow_rate);            // Move to probe start point
+    zprobe->coordinated_move(this->cal[X_AXIS], this->cal[Y_AXIS], this->cal[Z_AXIS], slow_rate); // use specified feedrate (mm/sec)
 
     for (int probes = 0; probes < probe_points; probes++){
         int pindex = 0;
 
         // z = z home offset - probed distance
-        float z = getZhomeoffset() - this->probeDistance((this->cal[X_AXIS] + this->cal_offset_x)-std::get<X_AXIS>(this->probe_offsets),
+
+        //zprobe->coordinated_move(this->cal[X_AXIS], this->cal[Y_AXIS], this->cal[Z_AXIS], slow_rate); // use specified feedrate (mm/sec)
+
+        float z = getZhomeoffset();
+        z -= this->probeDistance((this->cal[X_AXIS] + this->cal_offset_x)-std::get<X_AXIS>(this->probe_offsets),
                                                (this->cal[Y_AXIS] + this->cal_offset_y)-std::get<Y_AXIS>(this->probe_offsets));
 
         pindex = int(this->cal[X_AXIS]/this->bed_div_x + 0.25)*this->numCols + int(this->cal[Y_AXIS]/this->bed_div_y + 0.25);
@@ -484,19 +501,14 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
 
     stream->printf("\nCalibration done.\n");
     if (this->wait_for_probe) {                                  // Only do this it the config calls for probe removal position
-        this->cal[X_AXIS] = this->bed_x/2.0f;
-        this->cal[Y_AXIS] = this->bed_y/2.0f;
-        this->cal[Z_AXIS] = this->bed_z/2.0f;                    // Position head for probe removal
-        this->move(this->cal, slow_rate);
+        zprobe->coordinated_move(this->probe_x, this->probe_y, this->probe_z, slow_rate); // use specified feedrate (mm/sec)
 
         stream->printf("Please remove probe\n");
-
-    }
+   }
 
     // activate correction
     //this->normalize_grid();
     this->normalize_grid_2home();
-    this->setAdjustFunction(true);
 
     this->in_cal = false;
 
@@ -506,15 +518,14 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
 
 void ZGridStrategy::normalize_grid_2home()
 {
-    float* rd;
+    float rd[3];
     float home_Z_comp;
 
-    bool ok = PublicData::get_value( endstops_checksum, home_offset_checksum, &rd );
+    bool ok = PublicData::get_value( endstops_checksum, home_offset_checksum, rd );
 
     if (ok) {
        this->doCompensation( rd, 0);
        home_Z_comp = rd[2];
-       //home_Z_comp = this->getZOffset(((float*)rd)[0],((float*)rd)[1]);   // find the Z compensation at home position
     }
     else {
        home_Z_comp = 0;
@@ -527,7 +538,8 @@ void ZGridStrategy::normalize_grid_2home()
     // Doing this removes the need to change homing offset in Z because the reference remains unchanged.
 
     // add the offset to the current Z homing offset to preserve full probed offset.
-    // this->setZoffset(this->getZhomeoffset() + home_Z_comp);
+    this->setZoffset(this->getZhomeoffset() + home_Z_comp);
+
 
 }
 
@@ -550,15 +562,6 @@ void ZGridStrategy::homexyz()
     }
   }
 }
-
-void ZGridStrategy::move(float *position, float feed)
-{
-    // translate the position for non standard cartesian spaces (cal_offset)
-    zprobe->coordinated_move(position[0] + this->cal_offset_x, position[1] + this->cal_offset_y, position[2], feed); // use specified feedrate (mm/sec)
-
-    //THEKERNEL->streams->printf("DEBUG: move: %s cent: %i\n", cmd, this->center_zero);
-}
-
 
 void ZGridStrategy::next_cal(void){
     if ((((int) roundf(this->cal[X_AXIS] / this->bed_div_x)) & 1) != 0){  // Odd row
