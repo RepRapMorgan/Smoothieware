@@ -18,7 +18,6 @@ public:
     ~ZGridStrategy();
     bool handleGcode(Gcode* gcode);
     bool handleConfig();
-    //float getZOffset(float x, float y);
 
 private:
     void homexyz();

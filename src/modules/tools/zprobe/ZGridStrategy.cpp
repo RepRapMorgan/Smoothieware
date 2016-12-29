@@ -69,10 +69,6 @@
     M370                 : clears the ZGrid and the bed levelling is disabled until G32 is run again
     M370 X7 Y9           : allocates a new grid size of 7x9 and clears as above
 
-    M371                 : moves the head to the next calibration position without saving for manual calibration
-    M372                 : move the head to the next calibration position after saving the current probe point to memory - manual calbration
-    M373                 : completes calibration and enables the Z compensation grid
-
     M374                 : Save the grid to "Zgrid" on SD card
     M374 S###            : Save custom grid to "Zgrid.###" on SD card
 
@@ -458,24 +454,6 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
 
     this->in_cal = true;                         // In calbration mode
 
-    // Find bed position first so as to not run into troubles later.
-    // This can be fast, the accurate probe for this position will happen during the run
-
-    float zinit = getZhomeoffset();
-    float initmm;
-    zprobe->run_probe_return(initmm, slow_rate);
-
-  //** DEBUG **
-    stream->printf("zhomeoffset initial = %f\n",zinit);
-
-    zinit -= this->probe_z - (initmm - std::get<Y_AXIS>(this->probe_offsets));
-
-    //this->setZoffset(this->getZhomeoffset() + (this->probe_z - (zinit - std::get<Y_AXIS>(this->probe_offsets))));
-
-    //** DEBUG **
-    stream->printf("zinit = %f. zhomeoffset = %f\n",zinit, getZhomeoffset());
-
-
     this->cal[X_AXIS] = 0.0f;                    // Clear calibration position
     this->cal[Y_AXIS] = 0.0f;
     this->cal[Z_AXIS] = std::get<Z_AXIS>(this->probe_offsets) + zprobe->getProbeHeight();
@@ -483,10 +461,6 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
 
     for (int probes = 0; probes < probe_points; probes++){
         int pindex = 0;
-
-        // z = z home offset - probed distance
-
-        //zprobe->coordinated_move(this->cal[X_AXIS], this->cal[Y_AXIS], this->cal[Z_AXIS], slow_rate); // use specified feedrate (mm/sec)
 
         float z = getZhomeoffset();
         z -= this->probeDistance((this->cal[X_AXIS] + this->cal_offset_x)-std::get<X_AXIS>(this->probe_offsets),
@@ -506,8 +480,6 @@ bool ZGridStrategy::doProbing(StreamOutput *stream)  // probed calibration
         stream->printf("Please remove probe\n");
    }
 
-    // activate correction
-    //this->normalize_grid();
     this->normalize_grid_2home();
 
     this->in_cal = false;
@@ -524,6 +496,7 @@ void ZGridStrategy::normalize_grid_2home()
     bool ok = PublicData::get_value( endstops_checksum, home_offset_checksum, rd );
 
     if (ok) {
+       rd[2] = 0.0F; // we need to calculate the compensation offset only for normalization
        this->doCompensation( rd, 0);
        home_Z_comp = rd[2];
     }
@@ -568,8 +541,6 @@ void ZGridStrategy::next_cal(void){
         this->cal[Y_AXIS] -= this->bed_div_y;
         if (this->cal[Y_AXIS] < (0.0F - (bed_div_y / 2.0f))){
 
-            //THEKERNEL->streams->printf("DEBUG: Y (%f) < cond (%f)\n",this->cal[Y_AXIS], 0.0F);
-
             this->cal[X_AXIS] += bed_div_x;
             if (this->cal[X_AXIS] > (this->bed_x + (this->bed_div_x / 2.0f))){
                 this->cal[X_AXIS] = 0.0F;
@@ -583,8 +554,6 @@ void ZGridStrategy::next_cal(void){
         this->cal[Y_AXIS] += bed_div_y;
       if (this->cal[Y_AXIS] > (this->bed_y + (bed_div_y / 2.0f))){
 
-            //THEKERNEL->streams->printf("DEBUG: Y (%f) > cond (%f)\n",this->cal[Y_AXIS], this->bed_y);
-
             this->cal[X_AXIS] += bed_div_x;
             if (this->cal[X_AXIS] > (this->bed_x + (this->bed_div_x / 2.0f))){
                 this->cal[X_AXIS] = 0.0F;
@@ -595,32 +564,6 @@ void ZGridStrategy::next_cal(void){
         }
     }
 }
-
-//void ZGridStrategy::grid2circle(void){
-
-
-//}
-
-//void ZGridStrategy::circle2grid(void){
-
-//}
-
-
-
-
-/*void ZGridStrategy::setAdjustFunction(bool on)
-{
-    if(on) {
-        // set the compensationTransform in robot
-        //THEROBOT->compensationTransform = [this](float target[3]) { target[2] += this->getZOffset(target[0], target[1]); };
-        //THEROBOT->compensationTransform= [this](float *target, bool inverse) { if(inverse) target[2] -= this->plane->getz(target[0], target[1]); else target[2] += this->plane->getz(target[0], target[1]); };
-        THEROBOT->compensationTransform= [this](float *target, bool inverse) { if(inverse) target[2] -= this->getZOffset(target[0], target[1]); else target[2] += this->getZOffset(target[0], target[1]); };
-
-    }else{
-        // clear it
-        THEROBOT->compensationTransform= nullptr;
-    }
-}*/
 
 void ZGridStrategy::setAdjustFunction(bool on)
 {
@@ -634,32 +577,6 @@ void ZGridStrategy::setAdjustFunction(bool on)
         THEROBOT->compensationTransform = nullptr;
     }
 }
-
-/*void ZGridStrategy::doCompensation(float *target, bool inverse)
-{
-    // Adjust print surface height by linear interpolation over the bed_level array.
-    int half = (grid_size - 1) / 2;
-    float grid_x = std::max(0.001F - half, std::min(half - 0.001F, target[X_AXIS] / AUTO_BED_LEVELING_GRID_X));
-    float grid_y = std::max(0.001F - half, std::min(half - 0.001F, target[Y_AXIS] / AUTO_BED_LEVELING_GRID_Y));
-    int floor_x = floorf(grid_x);
-    int floor_y = floorf(grid_y);
-    float ratio_x = grid_x - floor_x;
-    float ratio_y = grid_y - floor_y;
-    float z1 = grid[(floor_x + half) + ((floor_y + half) * grid_size)];
-    float z2 = grid[(floor_x + half) + ((floor_y + half + 1) * grid_size)];
-    float z3 = grid[(floor_x + half + 1) + ((floor_y + half) * grid_size)];
-    float z4 = grid[(floor_x + half + 1) + ((floor_y + half + 1) * grid_size)];
-    float left = (1 - ratio_y) * z1 + ratio_y * z2;
-    float right = (1 - ratio_y) * z3 + ratio_y * z4;
-    float offset = (1 - ratio_x) * left + ratio_x * right;
-
-    if(inverse)
-        target[Z_AXIS] -= offset;
-    else
-        target[Z_AXIS] += offset;
-
-}
-*/
 
 // find the Z offset for the point on the plane at x, y
 void ZGridStrategy::doCompensation(float  *target, bool inverse)
@@ -703,11 +620,6 @@ float ZGridStrategy::probeDistance(float x, float y)
     return s;
 }
 
-/*float ZGridStrategy::zsteps_to_mm(float steps)
-{
-    return steps / Z_STEPS_PER_MM;
-}*/
-// parse a "X,Y,Z" string return x,y,z tuple
 std::tuple<float, float, float> ZGridStrategy::parseXYZ(const char *str)
 {
     float x = 0, y = 0, z= 0;
