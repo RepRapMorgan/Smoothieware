@@ -938,6 +938,10 @@ void Endstops::set_relative_homing_offset(Gcode *gcode)
         THEKERNEL->robot->pop_state();
     }
 
+    if (THEROBOT->compensationTransform) {  // Transform active.  Some work to be done.
+        THEROBOT->compensationTransform(cartesian, false);
+    }
+
 
     for (int i = X_AXIS; i <= Z_AXIS; i++) {  // Reset actual position to the initial values.
       if (gcode->has_letter('X'+i))
