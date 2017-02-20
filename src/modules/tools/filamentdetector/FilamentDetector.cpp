@@ -18,6 +18,7 @@
 #include "FilamentDetector.h"
 #include "utils.h"
 #include "Gcode.h"
+#include "ExtruderPublicAccess.h"
 
 #include "InterruptIn.h" // mbed
 #include "us_ticker_api.h" // mbed
@@ -90,9 +91,9 @@ void FilamentDetector::on_module_loaded()
     // register event-handlers
     if (this->encoder_pin != nullptr) {
         //This event is only valid if we are using the encodeer.
-        register_for_event(ON_SECOND_TICK); 
+        register_for_event(ON_SECOND_TICK);
     }
-    
+
     register_for_event(ON_MAIN_LOOP);
     register_for_event(ON_CONSOLE_LINE_RECEIVED);
     this->register_for_event(ON_GCODE_RECEIVED);
@@ -115,7 +116,7 @@ void FilamentDetector::on_console_line_received( void *argument )
     SerialMessage new_message = *static_cast<SerialMessage *>(argument);
     string possible_command = new_message.message;
     string cmd = shift_parameter(possible_command);
-    if(cmd == "resume") {
+    if(cmd == "resume" || cmd == "M601") {
         this->pulses= 0;
         e_last_moved= NAN;
         suspended= false;
@@ -124,10 +125,8 @@ void FilamentDetector::on_console_line_received( void *argument )
 
 float FilamentDetector::get_emove()
 {
-    float *rd;
-    if(PublicData::get_value( extruder_checksum, (void **)&rd )) {
-        return *(rd+5); // current position for extruder in mm
-    }
+    pad_extruder_t rd;
+    if(PublicData::get_value( extruder_checksum, (void *)&rd )) return rd.current_position;
     return NAN;
 }
 
