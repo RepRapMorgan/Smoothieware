@@ -945,8 +945,6 @@ void Robot::process_move(Gcode *gcode, enum MOTION_MODE_T motion_mode)
         }
     }
 
-<<<<<<< HEAD
-
     // Software limits : Limit the castesian movement to:
     //   ** if last_milestone is within build area limits : the limits of the build area
     //   ** if last_milestone is outside build area limits (after homing etc.) : no further away from build environment than the last_milestone
@@ -966,7 +964,6 @@ void Robot::process_move(Gcode *gcode, enum MOTION_MODE_T motion_mode)
        }
     }
 
-=======
     float delta_e= NAN;
 
     #if MAX_ROBOT_ACTUATORS > 3
@@ -1001,7 +998,6 @@ void Robot::process_move(Gcode *gcode, enum MOTION_MODE_T motion_mode)
         }
     }
     #endif
->>>>>>> upstream/edge
 
     if( gcode->has_letter('F') ) {
         if( motion_mode == SEEK )
