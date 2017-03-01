@@ -952,13 +952,13 @@ void Robot::process_move(Gcode *gcode, enum MOTION_MODE_T motion_mode)
     if (this->software_limits == true) {
        for(char letter = 'X'; letter <= 'Z'; letter++) {
           if (target[letter - 'X'] < this->softlimits[letter - 'X'][0]){
-             if (target[letter - 'X'] < this->last_milestone[letter - 'X']){
-                target[letter - 'X'] = (this->last_milestone[letter - 'X'] < this->softlimits[letter - 'X'][0])?this->last_milestone[letter - 'X']:this->softlimits[letter - 'X'][0];
+             if (target[letter - 'X'] < this->machine_position[letter - 'X']){
+                target[letter - 'X'] = (this->machine_position[letter - 'X'] < this->softlimits[letter - 'X'][0])?this->machine_position[letter - 'X']:this->softlimits[letter - 'X'][0];
              }
           }
           if (target[letter - 'X'] > this->softlimits[letter - 'X'][1]){
-             if (target[letter - 'X'] > this->last_milestone[letter - 'X']){
-                target[letter - 'X'] = (this->last_milestone[letter - 'X'] > this->softlimits[letter - 'X'][1])?this->last_milestone[letter - 'X']:this->softlimits[letter - 'X'][1];
+             if (target[letter - 'X'] > this->machine_position[letter - 'X']){
+                target[letter - 'X'] = (this->machine_position[letter - 'X'] > this->softlimits[letter - 'X'][1])?this->machine_position[letter - 'X']:this->softlimits[letter - 'X'][1];
              }
           }
        }
