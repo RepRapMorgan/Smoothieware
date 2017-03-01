@@ -32,7 +32,7 @@
 #include "ThreePointStrategy.h"
 #include "ZGridStrategy.h"
 #include "DeltaGridStrategy.h"
-#include "CartGridStrategy.h"
+//#include "CartGridStrategy.h"
 
 #define enable_checksum          CHECKSUM("enable")
 #define probe_pin_checksum       CHECKSUM("probe_pin")
@@ -111,10 +111,10 @@ void ZProbe::config_load()
                     found= true;
                     break;
 
-                case cart_grid_leveling_strategy_checksum:
-                    ls= new CartGridStrategy(this);
-                    found= true;
-                    break;
+                //case cart_grid_leveling_strategy_checksum:
+                //    ls= new CartGridStrategy(this);
+                //    found= true;
+                //    break;
             }
             if(found) {
                 if(ls->handleConfig()) {
