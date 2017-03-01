@@ -219,8 +219,12 @@ void Robot::load_config()
             pins[i].from_string(THEKERNEL->config->value(checksums[a][i])->by_default("nc")->as_string())->as_output();
         }
 
-        if(!pins[0].connected() || !pins[1].connected() || !pins[2].connected()) {
-            if(a <= Z_AXIS) THEKERNEL->streams->printf("FATAL: motor %d is not defined in config\n", 'X'+a);
+        if(!pins[0].connected() || !pins[1].connected()) { // step and dir must be defined, but enable is optional
+            if(a <= Z_AXIS) {
+                THEKERNEL->streams->printf("FATAL: motor %c is not defined in config\n", 'X'+a);
+                n_motors= a; // we only have this number of motors
+                return;
+            }
             break; // if any pin is not defined then the axis is not defined (and axis need to be defined in contiguous order)
         }
 
@@ -230,7 +234,7 @@ void Robot::load_config()
         if(n != a) {
             // this is a fatal error
             THEKERNEL->streams->printf("FATAL: motor %d does not match index %d\n", n, a);
-            __debugbreak();
+            return;
         }
 
         actuators[a]->change_steps_per_mm(THEKERNEL->config->value(checksums[a][3])->by_default(a == 2 ? 2560.0F : 80.0F)->as_number());
@@ -399,6 +403,8 @@ Robot::wcs_t Robot::mcs2wcs(const Robot::wcs_t& pos) const
 void Robot::check_max_actuator_speeds()
 {
     for (size_t i = 0; i < n_motors; i++) {
+        if(actuators[i]->is_extruder()) continue; //extruders are not included in this check
+
         float step_freq = actuators[i]->get_max_rate() * actuators[i]->get_steps_per_mm();
         if (step_freq > THEKERNEL->base_stepping_frequency) {
             actuators[i]->set_max_rate(floorf(THEKERNEL->base_stepping_frequency / actuators[i]->get_steps_per_mm()));
@@ -421,10 +427,18 @@ void Robot::on_gcode_received(void *argument)
             case 1:  motion_mode = LINEAR;  break;
             case 2:  motion_mode = CW_ARC;  break;
             case 3:  motion_mode = CCW_ARC; break;
-            case 4: { // G4 pause
+            case 4: { // G4 Dwell
                 uint32_t delay_ms = 0;
                 if (gcode->has_letter('P')) {
-                    delay_ms = gcode->get_int('P');
+                    if(THEKERNEL->is_grbl_mode()) {
+                        // in grbl mode (and linuxcnc) P is decimal seconds
+                        float f= gcode->get_value('P');
+                        delay_ms= f * 1000.0F;
+
+                    }else{
+                        // in reprap P is milliseconds, they always have to be different!
+                        delay_ms = gcode->get_int('P');
+                    }
                 }
                 if (gcode->has_letter('S')) {
                     delay_ms += gcode->get_int('S') * 1000;
@@ -600,6 +614,7 @@ void Robot::on_gcode_received(void *argument)
 
             case 92: // M92 - set steps per mm
                 for (int i = 0; i < n_motors; ++i) {
+                    if(actuators[i]->is_extruder()) continue; //extruders handle this themselves
                     char axis= (i <= Z_AXIS ? 'X'+i : 'A'+(i-A_AXIS));
                     if(gcode->has_letter(axis)) {
                         actuators[i]->change_steps_per_mm(this->to_millimeters(gcode->get_value(axis)));
@@ -611,7 +626,7 @@ void Robot::on_gcode_received(void *argument)
                 return;
 
             case 114:{
-                char buf[64];
+                char buf[128];
                 int n= print_position(gcode->subcode, buf, sizeof buf);
                 if(n > 0) gcode->txt_after_ok.append(buf, n);
                 return;
@@ -632,6 +647,7 @@ void Robot::on_gcode_received(void *argument)
                         }
                         if(gcode->subcode == 1) {
                             for (size_t i = A_AXIS; i < n_motors; i++) {
+                                if(actuators[i]->is_extruder()) continue; //extruders handle this themselves
                                 gcode->stream->printf(" %c: %g ", 'A' + i - A_AXIS, actuators[i]->get_max_rate());
                             }
                         }
@@ -1168,7 +1184,7 @@ bool Robot::append_milestone(const float target[], float rate_mm_s)
         }
         if(auxilliary_move) {
             // for E only moves we need to use the scaled E to calculate the distance
-            sos += pow(actuator_pos[i] - actuators[i]->get_last_milestone(), 2);
+            sos += powf(actuator_pos[i] - actuators[i]->get_last_milestone(), 2);
         }
     }
     if(auxilliary_move) {
