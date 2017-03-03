@@ -596,12 +596,31 @@ void Endstops::home_xy()
     THECONVEYOR->wait_for_idle();
 }
 
+void Endstops::home_xyz()
+{
+    // **** For bots that always home all axis XYZ
+    float delta[3] {homing_axis[X_AXIS].max_travel, homing_axis[Y_AXIS].max_travel, homing_axis[Z_AXIS].max_travel};
+    if(homing_axis[X_AXIS].home_direction) delta[X_AXIS]= -delta[X_AXIS];
+    if(homing_axis[Y_AXIS].home_direction) delta[Y_AXIS]= -delta[Y_AXIS];
+    if(homing_axis[Z_AXIS].home_direction) delta[Z_AXIS]= -delta[Z_AXIS];
+    float feed_rate = std::min(homing_axis[X_AXIS].fast_rate, homing_axis[Y_AXIS].fast_rate);
+    feed_rate = std::min(feed_rate, homing_axis[Z_AXIS].fast_rate);
+    THEROBOT->delta_move(delta, feed_rate, 3);
+
+    // Wait for axis to have homed
+    THECONVEYOR->wait_for_idle();
+}
+
+
 void Endstops::home(axis_bitmap_t a)
 {
     // reset debounce counts for all endstops
     for(auto& e : endstops) {
        e->debounce= 0;
     }
+
+    // Some polar bots like SCARA home all axis only, which moves all three actuators at the same time
+    bool home_all = this->is_scara ;
 
     if (is_scara) {
         THEROBOT->disable_arm_solution = true;  // Polar bots has to home in the actuator space.  Arm solution disabled.
@@ -614,18 +633,23 @@ void Endstops::home(axis_bitmap_t a)
 
     THEROBOT->disable_segmentation= true; // we must disable segmentation as this won't work with it enabled
 
-    if(!home_z_first) home_xy();
+    if(home_all) {
+        home_xyz();
+    } else {
 
-    if(axis_to_home[Z_AXIS]) {
-        // now home z
-        float delta[3] {0, 0, homing_axis[Z_AXIS].max_travel}; // we go the max z
-        if(homing_axis[Z_AXIS].home_direction) delta[Z_AXIS]= -delta[Z_AXIS];
-        THEROBOT->delta_move(delta, homing_axis[Z_AXIS].fast_rate, 3);
-        // wait for Z
-        THECONVEYOR->wait_for_idle();
+        if(!home_z_first) home_xy();
+
+        if(axis_to_home[Z_AXIS]) {
+            // now home z
+            float delta[3] {0, 0, homing_axis[Z_AXIS].max_travel}; // we go the max z
+            if(homing_axis[Z_AXIS].home_direction) delta[Z_AXIS]= -delta[Z_AXIS];
+            THEROBOT->delta_move(delta, homing_axis[Z_AXIS].fast_rate, 3);
+            // wait for Z
+            THECONVEYOR->wait_for_idle();
+        }
+
+        if(home_z_first) home_xy();
     }
-
-    if(home_z_first) home_xy();
 
     // potentially home A B and C individually
     if(homing_axis.size() > 3){
