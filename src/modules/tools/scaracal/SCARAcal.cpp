@@ -237,6 +237,8 @@ void SCARAcal::on_gcode_received(void *argument)
                       cartesian[3];
 
                 if(gcode->subcode == 1){ // 180 degree condition
+                    THEROBOT->software_limits = false;
+
                     target[0] = 180.0F;
                     target[1] = 225.0F;
                 } else {
@@ -269,6 +271,8 @@ void SCARAcal::on_gcode_received(void *argument)
                       cartesian[3],
                       S_trim[3];
 
+                THEROBOT->software_limits = false;
+
                 this->get_trim(S_trim[0], S_trim[1], S_trim[2]);    // get current trim to conserve other calbration values
 
                 set_trim(S_trim[0], 0, S_trim[2], gcode->stream);               // reset trim for calibration move
@@ -282,6 +286,8 @@ void SCARAcal::on_gcode_received(void *argument)
             case 363: {
                 float target[2] = {180.0F, 270.0F},
                       cartesian[3];
+
+                THEROBOT->software_limits = false;
 
                 gcode->stream->printf("Target: T %f P %f\n", target[0], target[1]);
 
@@ -332,6 +338,7 @@ void SCARAcal::on_gcode_received(void *argument)
             break;
 
             case 366:                                       // Translate trims to the actual endstop offsets for SCARA
+                THEROBOT->software_limits = true;
                 this->translate_trim(gcode->stream);
                 break;
 
