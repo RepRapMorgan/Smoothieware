@@ -18,6 +18,7 @@
 #include "PublicData.h"
 #include "arm_solutions/BaseSolution.h"
 #include "arm_solutions/CartesianSolution.h"
+#include "arm_solutions/CartCorrectSolution.h"
 #include "arm_solutions/RotatableCartesianSolution.h"
 #include "arm_solutions/LinearDeltaSolution.h"
 #include "arm_solutions/RotaryDeltaSolution.h"
@@ -58,6 +59,7 @@
 // arm solutions
 #define  arm_solution_checksum               CHECKSUM("arm_solution")
 #define  cartesian_checksum                  CHECKSUM("cartesian")
+#define  cartcorrect_checksum                CHECKSUM("cartcorrect")
 #define  rotatable_cartesian_checksum        CHECKSUM("rotatable_cartesian")
 #define  rostock_checksum                    CHECKSUM("rostock")
 #define  linear_delta_checksum               CHECKSUM("linear_delta")
@@ -158,6 +160,9 @@ void Robot::load_config()
 
     } else if(solution_checksum == morgan_checksum) {
         this->arm_solution = new MorganSCARASolution(THEKERNEL->config);
+
+    } else if(solution_checksum == cartcorrect_checksum) {
+        this->arm_solution = new CartCorrectSolution(THEKERNEL->config);
 
     } else if(solution_checksum == cartesian_checksum) {
         this->arm_solution = new CartesianSolution(THEKERNEL->config);
