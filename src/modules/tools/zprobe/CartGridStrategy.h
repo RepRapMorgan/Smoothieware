@@ -35,12 +35,8 @@ private:
 
     float *grid;
     std::tuple<float, float, float> probe_offsets;
-//<<<<<<< HEAD
     std::tuple<float, float, float> m_attach;
-//    uint8_t grid_size, grid_size_x, grid_size_y;
-//=======
     float x_start,y_start;
-//>>>>>>> upstream/edge
     float x_size,y_size;
 
     struct {
