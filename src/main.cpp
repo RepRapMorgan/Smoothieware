@@ -7,17 +7,17 @@
 
 #include "libs/Kernel.h"
 
-#include "modules/tools/laser/Laser.h"
-#include "modules/tools/spindle/SpindleMaker.h"
+//#include "modules/tools/laser/Laser.h"
+//#include "modules/tools/spindle/SpindleMaker.h"
 #include "modules/tools/extruder/ExtruderMaker.h"
 #include "modules/tools/temperaturecontrol/TemperatureControlPool.h"
 #include "modules/tools/endstops/Endstops.h"
 #include "modules/tools/zprobe/ZProbe.h"
 #include "modules/tools/scaracal/SCARAcal.h"
-#include "RotaryDeltaCalibration.h"
+//#include "RotaryDeltaCalibration.h"
 #include "modules/tools/switch/SwitchPool.h"
 #include "modules/tools/temperatureswitch/TemperatureSwitch.h"
-#include "modules/tools/drillingcycles/Drillingcycles.h"
+//#include "modules/tools/drillingcycles/Drillingcycles.h"
 #include "FilamentDetector.h"
 #include "MotorDriverControl.h"
 
@@ -28,7 +28,7 @@
 #include "modules/utils/player/Player.h"
 #include "modules/utils/killbutton/KillButton.h"
 #include "modules/utils/PlayLed/PlayLed.h"
-#include "modules/utils/panel/Panel.h"
+//#include "modules/utils/panel/Panel.h"
 #include "libs/Network/uip/Network.h"
 #include "Config.h"
 #include "checksumm.h"
@@ -153,27 +153,27 @@ void init() {
     tp->load_tools();
     delete tp;
     #endif
-    #ifndef NO_TOOLS_LASER
-    kernel->add_module( new Laser() );
-    #endif
-    #ifndef NO_TOOLS_SPINDLE
-    SpindleMaker *sm= new SpindleMaker();
-    sm->load_spindle();
-    delete sm;
+    //#ifndef NO_TOOLS_LASER
+    //kernel->add_module( new Laser() );
+    //#endif
+    //#ifndef NO_TOOLS_SPINDLE
+    //SpindleMaker *sm= new SpindleMaker();
+    //sm->load_spindle();
+    //delete sm;
     //kernel->add_module( new(AHB0) Spindle() );
-    #endif
-    #ifndef NO_UTILS_PANEL
-    kernel->add_module( new(AHB0) Panel() );
-    #endif
+    //#endif
+    //#ifndef NO_UTILS_PANEL
+    //kernel->add_module( new(AHB0) Panel() );
+    //#endif
     #ifndef NO_TOOLS_ZPROBE
     kernel->add_module( new(AHB0) ZProbe() );
     #endif
     #ifndef NO_TOOLS_SCARACAL
     kernel->add_module( new(AHB0) SCARAcal() );
     #endif
-    #ifndef NO_TOOLS_ROTARYDELTACALIBRATION
-    kernel->add_module( new(AHB0) RotaryDeltaCalibration() );
-    #endif
+    //#ifndef NO_TOOLS_ROTARYDELTACALIBRATION
+    //kernel->add_module( new(AHB0) RotaryDeltaCalibration() );
+    //#endif
     #ifndef NONETWORK
     kernel->add_module( new Network() );
     #endif
@@ -181,9 +181,9 @@ void init() {
     // Must be loaded after TemperatureControl
     kernel->add_module( new(AHB0) TemperatureSwitch() );
     #endif
-    #ifndef NO_TOOLS_DRILLINGCYCLES
-    kernel->add_module( new(AHB0) Drillingcycles() );
-    #endif
+    //#ifndef NO_TOOLS_DRILLINGCYCLES
+    //kernel->add_module( new(AHB0) Drillingcycles() );
+    //#endif
     #ifndef NO_TOOLS_FILAMENTDETECTOR
     kernel->add_module( new(AHB0) FilamentDetector() );
     #endif

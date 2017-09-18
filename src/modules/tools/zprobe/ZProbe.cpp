@@ -28,9 +28,9 @@
 #include "utils.h"
 
 // strategies we know about
-#include "DeltaCalibrationStrategy.h"
-#include "ThreePointStrategy.h"
-#include "DeltaGridStrategy.h"
+//#include "DeltaCalibrationStrategy.h"
+//#include "ThreePointStrategy.h"
+//#include "DeltaGridStrategy.h"
 #include "CartGridStrategy.h"
 
 #define enable_checksum          CHECKSUM("enable")
@@ -91,22 +91,6 @@ void ZProbe::config_load()
 
             // check with each known strategy and load it if it matches
             switch(cs) {
-                case delta_calibration_strategy_checksum:
-                    ls= new DeltaCalibrationStrategy(this);
-                    found= true;
-                    break;
-
-                case three_point_leveling_strategy_checksum:
-                    // NOTE this strategy is mutually exclusive with the delta calibration strategy
-                    ls= new ThreePointStrategy(this);
-                    found= true;
-                    break;
-
-                case delta_grid_leveling_strategy_checksum:
-                    ls= new DeltaGridStrategy(this);
-                    found= true;
-                    break;
-
                 case cart_grid_leveling_strategy_checksum:
                     ls= new CartGridStrategy(this);
                     found= true;
@@ -128,12 +112,12 @@ void ZProbe::config_load()
 
     // default for backwards compatibility add DeltaCalibrationStrategy if a delta
     // may be deprecated
-    if(this->strategies.empty()) {
-        if(this->is_delta) {
-            this->strategies.push_back(new DeltaCalibrationStrategy(this));
-            this->strategies.back()->handleConfig();
-        }
-    }
+    //if(this->strategies.empty()) {
+    //    if(this->is_delta) {
+    //        this->strategies.push_back(new DeltaCalibrationStrategy(this));
+    //        this->strategies.back()->handleConfig();
+    //    }
+    //}
 
     this->probe_height  = THEKERNEL->config->value(zprobe_checksum, probe_height_checksum)->by_default(5.0F)->as_number();
     this->slow_feedrate = THEKERNEL->config->value(zprobe_checksum, slow_feedrate_checksum)->by_default(5)->as_number(); // feedrate in mm/sec

@@ -18,11 +18,11 @@
 #include "PublicData.h"
 #include "arm_solutions/BaseSolution.h"
 #include "arm_solutions/CartesianSolution.h"
-#include "arm_solutions/RotatableCartesianSolution.h"
-#include "arm_solutions/LinearDeltaSolution.h"
-#include "arm_solutions/RotaryDeltaSolution.h"
-#include "arm_solutions/HBotSolution.h"
-#include "arm_solutions/CoreXZSolution.h"
+//#include "arm_solutions/RotatableCartesianSolution.h"
+//#include "arm_solutions/LinearDeltaSolution.h"
+//#include "arm_solutions/RotaryDeltaSolution.h"
+//#include "arm_solutions/HBotSolution.h"
+//#include "arm_solutions/CoreXZSolution.h"
 #include "arm_solutions/MorganSCARASolution.h"
 #include "StepTicker.h"
 #include "checksumm.h"
@@ -149,26 +149,8 @@ void Robot::load_config()
     if (this->arm_solution) delete this->arm_solution;
     int solution_checksum = get_checksum(THEKERNEL->config->value(arm_solution_checksum)->by_default("cartesian")->as_string());
     // Note checksums are not const expressions when in debug mode, so don't use switch
-    if(solution_checksum == hbot_checksum || solution_checksum == corexy_checksum) {
-        this->arm_solution = new HBotSolution(THEKERNEL->config);
-
-    } else if(solution_checksum == corexz_checksum) {
-        this->arm_solution = new CoreXZSolution(THEKERNEL->config);
-
-    } else if(solution_checksum == rostock_checksum || solution_checksum == kossel_checksum || solution_checksum == delta_checksum || solution_checksum ==  linear_delta_checksum) {
-        this->arm_solution = new LinearDeltaSolution(THEKERNEL->config);
-
-    } else if(solution_checksum == rotatable_cartesian_checksum) {
-        this->arm_solution = new RotatableCartesianSolution(THEKERNEL->config);
-
-    } else if(solution_checksum == rotary_delta_checksum) {
-        this->arm_solution = new RotaryDeltaSolution(THEKERNEL->config);
-
-    } else if(solution_checksum == morgan_checksum) {
+    if(solution_checksum == morgan_checksum) {
         this->arm_solution = new MorganSCARASolution(THEKERNEL->config);
-
-    } else if(solution_checksum == cartesian_checksum) {
-        this->arm_solution = new CartesianSolution(THEKERNEL->config);
 
     } else {
         this->arm_solution = new CartesianSolution(THEKERNEL->config);
