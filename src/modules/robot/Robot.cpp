@@ -395,8 +395,10 @@ void Robot::print_position(uint8_t subcode, std::string& res, bool ignore_extrud
 Robot::wcs_t Robot::mcs2wcs(const Robot::wcs_t& pos) const
 {
     return std::make_tuple(
-        std::get<X_AXIS>(pos) - std::get<X_AXIS>(wcs_offsets[current_wcs]) + std::get<X_AXIS>(g92_offset) - (this->is_scara)?0:std::get<X_AXIS>(tool_offset),
-        std::get<Y_AXIS>(pos) - std::get<Y_AXIS>(wcs_offsets[current_wcs]) + std::get<Y_AXIS>(g92_offset) - (this->is_scara)?0:std::get<Y_AXIS>(tool_offset),
+        //std::get<X_AXIS>(pos) - std::get<X_AXIS>(wcs_offsets[current_wcs]) + std::get<X_AXIS>(g92_offset) - (this->is_scara)?0:std::get<X_AXIS>(tool_offset),
+        //std::get<Y_AXIS>(pos) - std::get<Y_AXIS>(wcs_offsets[current_wcs]) + std::get<Y_AXIS>(g92_offset) - (this->is_scara)?0:std::get<Y_AXIS>(tool_offset),
+        std::get<X_AXIS>(pos) - std::get<X_AXIS>(wcs_offsets[current_wcs]) + std::get<X_AXIS>(g92_offset) - std::get<X_AXIS>(tool_offset),
+        std::get<Y_AXIS>(pos) - std::get<Y_AXIS>(wcs_offsets[current_wcs]) + std::get<Y_AXIS>(g92_offset) - std::get<Y_AXIS>(tool_offset),
         std::get<Z_AXIS>(pos) - std::get<Z_AXIS>(wcs_offsets[current_wcs]) + std::get<Z_AXIS>(g92_offset) - std::get<Z_AXIS>(tool_offset)
     );
 }
@@ -907,11 +909,13 @@ void Robot::process_move(Gcode *gcode, enum MOTION_MODE_T motion_mode)
         if(this->absolute_mode) {
             // apply wcs offsets and g92 offset and tool offset
             if(!isnan(param[X_AXIS])) {
-                target[X_AXIS]= param[X_AXIS] + std::get<X_AXIS>(wcs_offsets[current_wcs]) - std::get<X_AXIS>(g92_offset) + (this->is_scara)?0:std::get<X_AXIS>(tool_offset);
+                //target[X_AXIS]= param[X_AXIS] + std::get<X_AXIS>(wcs_offsets[current_wcs]) - std::get<X_AXIS>(g92_offset) + (this->is_scara)?0:std::get<X_AXIS>(tool_offset);
+                target[X_AXIS]= param[X_AXIS] + std::get<X_AXIS>(wcs_offsets[current_wcs]) - std::get<X_AXIS>(g92_offset) + std::get<X_AXIS>(tool_offset);
             }
 
             if(!isnan(param[Y_AXIS])) {
-                target[Y_AXIS]= param[Y_AXIS] + std::get<Y_AXIS>(wcs_offsets[current_wcs]) - std::get<Y_AXIS>(g92_offset) + (this->is_scara)?0:std::get<Y_AXIS>(tool_offset);
+                //target[Y_AXIS]= param[Y_AXIS] + std::get<Y_AXIS>(wcs_offsets[current_wcs]) - std::get<Y_AXIS>(g92_offset) + (this->is_scara)?0:std::get<Y_AXIS>(tool_offset);
+                target[Y_AXIS]= param[Y_AXIS] + std::get<Y_AXIS>(wcs_offsets[current_wcs]) - std::get<Y_AXIS>(g92_offset) + std::get<Y_AXIS>(tool_offset);
             }
 
             if(!isnan(param[Z_AXIS])) {

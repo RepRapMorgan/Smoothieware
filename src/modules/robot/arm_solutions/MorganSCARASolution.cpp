@@ -114,7 +114,8 @@ void MorganSCARASolution::actuator_to_cartesian(const ActuatorCoordinates &actua
     float y1, y2,
           actuator_rad[2];
 
-    actuator_rad[X_AXIS] = (actuator_mm[X_AXIS] - this->morgan_tool_offset_a) / (180.0F / 3.14159265359f);
+    //actuator_rad[X_AXIS] = (actuator_mm[X_AXIS] - this->morgan_tool_offset_a) / (180.0F / 3.14159265359f);
+    actuator_rad[X_AXIS] = (actuator_mm[X_AXIS]) / (180.0F / 3.14159265359f);
     actuator_rad[Y_AXIS] = (actuator_mm[Y_AXIS]) / (180.0F / 3.14159265359f);
 
     y1 = sinf(actuator_rad[X_AXIS]) * this->arm1_length;
