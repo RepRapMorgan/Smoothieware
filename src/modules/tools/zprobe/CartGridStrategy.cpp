@@ -566,7 +566,7 @@ bool CartGridStrategy::doProbe(Gcode *gc)
 
             if(!zprobe->doProbeAt(mm, xProbe - X_PROBE_OFFSET_FROM_EXTRUDER, yProbe - Y_PROBE_OFFSET_FROM_EXTRUDER)) return false;
             float measured_z = zprobe->getProbeHeight() - mm - z_reference; // this is the delta z from bed at 0,0
-            gc->stream->printf("DEBUG: X%1.4f, Y%1.4f, Z%1.4f\n", xProbe, yProbe, measured_z);
+            //gc->stream->printf("DEBUG: X%1.4f, Y%1.4f, Z%1.4f\n", xProbe, yProbe, measured_z);
             grid[xCount + (this->current_grid_x_size * yCount)] = measured_z;
         }
     }
