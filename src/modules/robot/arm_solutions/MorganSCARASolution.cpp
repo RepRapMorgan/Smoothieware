@@ -27,9 +27,9 @@
 
 MorganSCARASolution::MorganSCARASolution(Config* config)
 {
-    // arm1_length is the length of the inner main arm from hinge to hinge
+    // arm1_length is the length of the left inner main arm from hinge to hinge
     arm1_length         = config->value(arm1_length_checksum)->by_default(150.0f)->as_number();
-    // arm2_length is the length of the inner main arm from hinge to hinge
+    // arm2_length is the length of the left outer main arm from hinge to hinge
     arm2_length         = config->value(arm2_length_checksum)->by_default(150.0f)->as_number();
     // morgan_offset_x is the x offset of bed zero position towards the SCARA tower center
     morgan_offset_x     = config->value(morgan_offset_x_checksum)->by_default(100.0f)->as_number();
@@ -66,7 +66,6 @@ void MorganSCARASolution::cartesian_to_actuator(const float cartesian_mm[], Actu
 {
 
     float SCARA_pos[2],
-          SCARA_A1,
           SCARA_C2,
           SCARA_S2,
           SCARA_K1,
@@ -78,12 +77,10 @@ void MorganSCARASolution::cartesian_to_actuator(const float cartesian_mm[], Actu
     SCARA_pos[Y_AXIS] = (cartesian_mm[Y_AXIS]  * this->morgan_scaling_y - this->morgan_offset_y);  // morgan_offset not to be confused with home offset. This makes the SCARA math work.
     // Y has to be scaled before subtracting offset to ensure position on bed.
 
-    SCARA_A1 = this->arm1_length + this->morgan_tool_offset_l;  // Find mathimatical arm length
-
-    if (SCARA_A1 == this->arm2_length)
-        SCARA_C2 = (SQ(SCARA_pos[X_AXIS]) + SQ(SCARA_pos[Y_AXIS]) - 2.0f * SQ(SCARA_A1)) / (2.0f * SQ(SCARA_A1));
-    else
-        SCARA_C2 = (SQ(SCARA_pos[X_AXIS]) + SQ(SCARA_pos[Y_AXIS]) - SQ(SCARA_A1) - SQ(this->arm2_length)) / (2.0f * SQ(SCARA_A1));
+    //if (this->arm1_length == this->arm2_length)
+    //    SCARA_C2 = (SQ(SCARA_pos[X_AXIS]) + SQ(SCARA_pos[Y_AXIS]) - 2.0f * SQ(this->arm1_length)) / (2.0f * SQ(this->arm1_length));
+    //else
+        SCARA_C2 = (SQ(SCARA_pos[X_AXIS]) + SQ(SCARA_pos[Y_AXIS]) - SQ(this->arm1_length) - SQ(this->arm2_length)) / (2.0f * (this->arm1_length * this->arm2_length));
 
     // SCARA position is undefined if abs(SCARA_C2) >=1
     // In reality abs(SCARA_C2) >0.95 can be problematic.
@@ -96,7 +93,7 @@ void MorganSCARASolution::cartesian_to_actuator(const float cartesian_mm[], Actu
 
     SCARA_S2 = sqrtf(1.0f - SQ(SCARA_C2));
 
-    SCARA_K1 = SCARA_A1 + this->arm2_length * SCARA_C2;
+    SCARA_K1 = this->arm1_length + this->arm2_length * SCARA_C2;
     SCARA_K2 = this->arm2_length * SCARA_S2;
 
     SCARA_theta = (atan2f(SCARA_pos[X_AXIS], SCARA_pos[Y_AXIS]) - atan2f(SCARA_K1, SCARA_K2)) * -1.0f; // Morgan Thomas turns Theta in oposite direction
@@ -106,7 +103,7 @@ void MorganSCARASolution::cartesian_to_actuator(const float cartesian_mm[], Actu
     actuator_mm[ALPHA_STEPPER] = (to_degrees(SCARA_theta) + this->morgan_tool_offset_a);             // Multiply by 180/Pi  -  theta is support arm angle
     actuator_mm[BETA_STEPPER ] = to_degrees(SCARA_theta + SCARA_psi); // Morgan kinematics (dual arm)
     //actuator_mm[BETA_STEPPER ] = to_degrees(SCARA_psi);             // real scara
-    actuator_mm[GAMMA_STEPPER] = cartesian_mm[Z_AXIS];                // No inverse kinematics on Z - Position to add bed offset?
+    actuator_mm[GAMMA_STEPPER] = cartesian_mm[Z_AXIS];                // No inverse kinematics on Z
 
 }
 
@@ -115,16 +112,15 @@ void MorganSCARASolution::actuator_to_cartesian(const ActuatorCoordinates &actua
     // Perform forward kinematics, and place results in cartesian_mm[]
 
     float y1, y2,
-          actuator_rad[2],
-          SCARA_A1 = this->arm1_length + this->morgan_tool_offset_l;  // Find mathimatical arm length
+          actuator_rad[2];
 
     actuator_rad[X_AXIS] = (actuator_mm[X_AXIS] - this->morgan_tool_offset_a) / (180.0F / 3.14159265359f);
     actuator_rad[Y_AXIS] = (actuator_mm[Y_AXIS]) / (180.0F / 3.14159265359f);
 
-    y1 = sinf(actuator_rad[X_AXIS]) * SCARA_A1;
+    y1 = sinf(actuator_rad[X_AXIS]) * this->arm1_length;
     y2 = sinf(actuator_rad[Y_AXIS]) * this->arm2_length + y1;
 
-    cartesian_mm[X_AXIS] = (((cosf(actuator_rad[X_AXIS]) * SCARA_A1) + (cosf(actuator_rad[Y_AXIS]) * this->arm2_length)) / this->morgan_scaling_x) + this->morgan_offset_x;
+    cartesian_mm[X_AXIS] = (((cosf(actuator_rad[X_AXIS]) * this->arm1_length) + (cosf(actuator_rad[Y_AXIS]) * this->arm2_length)) / this->morgan_scaling_x) + this->morgan_offset_x;
     cartesian_mm[Y_AXIS] = (y2 + this->morgan_offset_y) / this->morgan_scaling_y;
     cartesian_mm[Z_AXIS] = actuator_mm[Z_AXIS];
 
@@ -175,14 +171,14 @@ bool MorganSCARASolution::set_optional(const arm_options_t& options)
     if(i != options.end()) {
         this->morgan_undefined_max = i->second;
     }
-    i = options.find('N');         // Home initial position X
+    /*i = options.find('N');         // Home initial position X
     if(i != options.end()) {
         morgan_tool_offset_l = i->second;
     }
     i = options.find('O');         // Home initial position Y
     if(i != options.end()) {
         morgan_tool_offset_a = i->second;
-    }
+    }*/
 
     init();
     return true;
@@ -199,8 +195,8 @@ bool MorganSCARASolution::get_optional(arm_options_t& options, bool force_all) c
     // options['C']= this->morgan_scaling_z;
     options['D'] = this->morgan_undefined_min;
     options['E'] = this->morgan_undefined_max;
-    options['N'] = this->morgan_tool_offset_l;
-    options['O'] = this->morgan_tool_offset_a;
+    /*options['N'] = this->morgan_tool_offset_l;
+    options['O'] = this->morgan_tool_offset_a;*/
 
     return true;
 };

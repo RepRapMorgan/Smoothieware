@@ -174,7 +174,7 @@ void SCARAcal::SCARA_ang_move(float theta, float psi, float z, float feedrate)
     // Assemble Gcode to add onto the queue
     snprintf(cmd, sizeof(cmd), "G0 X%1.3f Y%1.3f Z%1.3f F%1.1f", cartesian[0], cartesian[1], cartesian[2], feedrate * 60); // use specified feedrate (mm/sec)
 
-    //THEKERNEL->streams->printf("DEBUG: move: %s\n", cmd);
+    THEKERNEL->streams->printf("DEBUG: move: %s\n", cmd);
 
     Gcode gc(cmd, &(StreamOutput::NullStream));
     THEROBOT->on_gcode_received(&gc); // send to robot directly
@@ -214,8 +214,8 @@ void SCARAcal::on_gcode_received(void *argument)
                 if(gcode->has_letter('P')) {
                     // Program the current position as target
                     ActuatorCoordinates actuators;
-                    float S_delta[2],
-                          S_trim[3];
+                    float S_delta[2];//,
+                          //S_trim[3];
 
                     THEROBOT->get_axis_position(cartesian);    // get actual position from robot
                     THEROBOT->arm_solution->cartesian_to_actuator( cartesian, actuators );      // translate to get actuator position
@@ -312,9 +312,20 @@ void SCARAcal::on_gcode_received(void *argument)
             break;
 
             case 364: {
-                float target[2] = {45.0F, 135.0F},
+                float target[2], // = {45.0F, 135.0F},
                       cartesian[3],
                       S_trim[3];
+
+                if(gcode->subcode == 1){ // 180 degree condition
+                    THEROBOT->software_limits = false;
+
+                    target[0] = 90.0F;
+                    target[1] = 180.0F;
+                } else {
+                    target[0] = 45.0F;
+                    target[1] = 135.0F;
+                }
+
 
                 this->get_trim(S_trim[0], S_trim[1], S_trim[2]);	// get current trim to conserve other calbration values
 
@@ -326,7 +337,14 @@ void SCARAcal::on_gcode_received(void *argument)
                     THEROBOT->get_axis_position(cartesian);                                     // get actual position from robot
                     THEROBOT->arm_solution->cartesian_to_actuator( cartesian, actuators );      // translate it to get actual actuator angles
 
-                    S_delta[1] = ( actuators[1] - actuators[0]) - ( target[1] - target[0] );            // Find difference in angle - not actuator difference, and
+                    if (gcode->subcode == 1){  // set second arm similar to the first one: parallel to the platform
+                       S_delta[1] = actuators[1] - target[1];
+                    }
+                    else { // normal condition (90 degree calibration piece)
+
+                       S_delta[1] = ( actuators[1] - actuators[0]) - ( target[1] - target[0] );            // Find difference in angle - not actuator difference, and
+                    }
+
                     set_trim(S_trim[0], S_delta[1], S_trim[2], gcode->stream);                                  // set trim to reflect the difference
                 } else {
                     set_trim(S_trim[0], 0, S_trim[2], gcode->stream);                                           // reset trim for calibration move
