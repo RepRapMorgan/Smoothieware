@@ -41,6 +41,7 @@ class Robot : public Module {
         float get_z_maxfeedrate() const { return this->max_speeds[Z_AXIS]; }
         float get_default_acceleration() const { return default_acceleration; }
         void setToolOffset(const float offset[N_PRIMARY_AXIS]);
+        std::tuple<float, float, float> getToolOffset();
         float get_feed_rate() const;
         float get_s_value() const { return s_value; }
         void set_s_value(float s) { s_value= s; }
@@ -75,6 +76,8 @@ class Robot : public Module {
         // Workspace coordinate systems
         wcs_t mcs2wcs(const wcs_t &pos) const;
         wcs_t mcs2wcs(const float *pos) const { return mcs2wcs(wcs_t(pos[X_AXIS], pos[Y_AXIS], pos[Z_AXIS])); }
+
+
 
         struct {
             bool inch_mode:1;                                 // true for inch mode, false for millimeter mode ( default )
@@ -116,8 +119,8 @@ class Robot : public Module {
 
         std::array<wcs_t, MAX_WCS> wcs_offsets; // these are persistent once saved with M500
         uint8_t current_wcs{0}; // 0 means G54 is enabled this is persistent once saved with M500
-        wcs_t g92_offset;
         wcs_t tool_offset; // used for multiple extruders, sets the tool offset for the current extruder applied first
+        wcs_t g92_offset;
         std::tuple<float, float, float, uint8_t> last_probe_position{0,0,0,0};
 
         using saved_state_t= std::tuple<float, float, bool, bool, bool, uint8_t>; // save current feedrate and absolute mode, e absolute mode, inch mode, current_wcs

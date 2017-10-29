@@ -858,6 +858,7 @@ void Endstops::process_home_command(Gcode* gcode)
         // Here's where we would have been if the endstops were perfectly trimmed
         // NOTE on a rotary delta home_offset is actuator position in degrees when homed and
         // home_offset is the theta offset for each actuator, so M206 is used to set theta offset for each actuator in degrees
+        // SCARA uses the cartesian coordinates of home position as reference, applied tool offset needs to be compensated for.
         // FIXME not sure this will work with compensation transforms on.
         float ideal_position[3] = {
             homing_axis[X_AXIS].homing_position + homing_axis[X_AXIS].home_offset,
@@ -867,6 +868,14 @@ void Endstops::process_home_command(Gcode* gcode)
 
         bool has_endstop_trim = this->is_delta || is_scara;
         if (has_endstop_trim) {
+            float offset[3];
+
+            if (is_scara) { // we need to make sure tool_offset is zero for homing to work correctly
+                float zero[3] = {0.0F, 0.0F, 0.0F};
+                std::tie(offset[X_AXIS],offset[Y_AXIS],offset[Z_AXIS]) = THEROBOT->getToolOffset();
+                THEROBOT->setToolOffset(zero);
+
+            }
             ActuatorCoordinates ideal_actuator_position;
             THEROBOT->arm_solution->cartesian_to_actuator(ideal_position, ideal_actuator_position);
 
@@ -877,8 +886,15 @@ void Endstops::process_home_command(Gcode* gcode)
                 ideal_actuator_position[Z_AXIS] - this->trim_mm[Z_AXIS]
             };
 
+
+            if (is_scara) { // Now that we know the actuator positions, reinstate the offset
+                THEROBOT->setToolOffset(offset);
+
+            }
+
             float real_position[3];
             THEROBOT->arm_solution->actuator_to_cartesian(real_actuator_position, real_position);
+
             // Reset the actuator positions to correspond to our real position
             THEROBOT->reset_axis_position(real_position[0], real_position[1], real_position[2]);
 

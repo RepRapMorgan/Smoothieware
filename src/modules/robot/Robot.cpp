@@ -93,10 +93,11 @@
 #define  beta_checksum                       CHECKSUM("beta")
 #define  gamma_checksum                      CHECKSUM("gamma")
 
-#define laser_module_default_power_checksum     CHECKSUM("laser_module_default_power")
+#define laser_module_default_power_checksum  CHECKSUM("laser_module_default_power")
 
-#define ARC_ANGULAR_TRAVEL_EPSILON 5E-7F // Float (radians)
-#define PI 3.14159265358979323846F // force to be float, do not use M_PI
+#define ARC_ANGULAR_TRAVEL_EPSILON           5E-7F // Float (radians)
+#define PI                                   3.14159265358979323846F // force to be float, do not use M_PI
+
 
 // The Robot converts GCodes into actual movements, and then adds them to the Planner, which passes them to the Conveyor so they can be added to the queue
 // It takes care of cutting arcs into segments, same thing for line that are too long
@@ -395,10 +396,12 @@ void Robot::print_position(uint8_t subcode, std::string& res, bool ignore_extrud
 Robot::wcs_t Robot::mcs2wcs(const Robot::wcs_t& pos) const
 {
     return std::make_tuple(
-        //std::get<X_AXIS>(pos) - std::get<X_AXIS>(wcs_offsets[current_wcs]) + std::get<X_AXIS>(g92_offset) - (this->is_scara)?0:std::get<X_AXIS>(tool_offset),
-        //std::get<Y_AXIS>(pos) - std::get<Y_AXIS>(wcs_offsets[current_wcs]) + std::get<Y_AXIS>(g92_offset) - (this->is_scara)?0:std::get<Y_AXIS>(tool_offset),
-        std::get<X_AXIS>(pos) - std::get<X_AXIS>(wcs_offsets[current_wcs]) + std::get<X_AXIS>(g92_offset) - std::get<X_AXIS>(tool_offset),
-        std::get<Y_AXIS>(pos) - std::get<Y_AXIS>(wcs_offsets[current_wcs]) + std::get<Y_AXIS>(g92_offset) - std::get<Y_AXIS>(tool_offset),
+        // Morgan SCARA: Tool X and Y offsets are handled by the inverse kinematics since the tool rotates with the arm. Return zero offset here.
+        std::get<X_AXIS>(pos) - std::get<X_AXIS>(wcs_offsets[current_wcs]) + std::get<X_AXIS>(g92_offset),// - (this->is_scara)?0.0F:std::get<X_AXIS>(tool_offset),
+        std::get<Y_AXIS>(pos) - std::get<Y_AXIS>(wcs_offsets[current_wcs]) + std::get<Y_AXIS>(g92_offset),// - (this->is_scara)?0.0F:std::get<Y_AXIS>(tool_offset),
+
+        //std::get<X_AXIS>(pos) - std::get<X_AXIS>(wcs_offsets[current_wcs]) + std::get<X_AXIS>(g92_offset) - std::get<X_AXIS>(tool_offset),
+        //std::get<Y_AXIS>(pos) - std::get<Y_AXIS>(wcs_offsets[current_wcs]) + std::get<Y_AXIS>(g92_offset) - std::get<Y_AXIS>(tool_offset),
         std::get<Z_AXIS>(pos) - std::get<Z_AXIS>(wcs_offsets[current_wcs]) + std::get<Z_AXIS>(g92_offset) - std::get<Z_AXIS>(tool_offset)
     );
 }
@@ -500,6 +503,38 @@ void Robot::on_gcode_received(void *argument)
                         wcs_offsets[n] = wcs_t(x, y, z);
                     }
                 }
+
+
+                // G10 L10 P### X### Y### Z###
+                // Set tool_offset via Gcode
+                if(gcode->has_letter('L') && (gcode->get_int('L') == 10) && gcode->has_letter('P')) {
+                        float x, y, z;
+
+                        // get current offset
+                        std::tie(x, y, z) = tool_offset;
+
+                            if(gcode->has_letter('X')){
+                                x = to_millimeters(gcode->get_value('X'));
+                            }
+                            if(gcode->has_letter('Y')){
+                                y = to_millimeters(gcode->get_value('Y'));
+                            }
+                            if(gcode->has_letter('Z')) {
+                                z = to_millimeters(gcode->get_value('Z'));
+                            }
+
+                          tool_offset = std::make_tuple(x,y,z);
+
+                        this->reset_position_from_current_actuator_position();
+
+                        //float real_position[3];
+                        //this->arm_solution->actuator_to_cartesian(actuator_pos, real_position);
+                        // using actuator positions, find the postion of the toolhead with the new offsets
+
+                        // Reset the axis positions to correspond to our new real position
+                        //this->reset_axis_position(real_position[0], real_position[1], real_position[2]);
+                }
+
                 break;
 
             case 17: this->select_plane(X_AXIS, Y_AXIS, Z_AXIS);   break;
@@ -813,6 +848,19 @@ void Robot::on_gcode_received(void *argument)
                     }
                     ++n;
                 }
+
+                gcode->stream->printf(";ToolOffset settings\n");
+                //gcode->stream->printf("%s\n", wcs2gcode(current_wcs).c_str());
+                //int n = 1;
+                //for(auto &i : tool_offsets) {
+                    if(tool_offset != wcs_t(0, 0, 0)) {
+                        float x, y, z;
+                        std::tie(x, y, z) = tool_offset;
+                        gcode->stream->printf("G10 L10 P%d X%f Y%f Z%f\n", n, x, y, z);
+                    }
+                    //++n;
+                //}
+
                 if(save_g92) {
                     // linuxcnc saves G92, so we do too if configured, default is to not save to maintain backward compatibility
                     // also it needs to be used to set Z0 on rotary deltas as M206/306 can't be used, so saving it is necessary in that case
@@ -909,13 +957,13 @@ void Robot::process_move(Gcode *gcode, enum MOTION_MODE_T motion_mode)
         if(this->absolute_mode) {
             // apply wcs offsets and g92 offset and tool offset
             if(!isnan(param[X_AXIS])) {
-                //target[X_AXIS]= param[X_AXIS] + std::get<X_AXIS>(wcs_offsets[current_wcs]) - std::get<X_AXIS>(g92_offset) + (this->is_scara)?0:std::get<X_AXIS>(tool_offset);
-                target[X_AXIS]= param[X_AXIS] + std::get<X_AXIS>(wcs_offsets[current_wcs]) - std::get<X_AXIS>(g92_offset) + std::get<X_AXIS>(tool_offset);
+                target[X_AXIS]= param[X_AXIS] + std::get<X_AXIS>(wcs_offsets[current_wcs]) - std::get<X_AXIS>(g92_offset);// + (this->is_scara)?0:std::get<X_AXIS>(tool_offset);
+                //target[X_AXIS]= param[X_AXIS] + std::get<X_AXIS>(wcs_offsets[current_wcs]) - std::get<X_AXIS>(g92_offset) + std::get<X_AXIS>(tool_offset);
             }
 
             if(!isnan(param[Y_AXIS])) {
-                //target[Y_AXIS]= param[Y_AXIS] + std::get<Y_AXIS>(wcs_offsets[current_wcs]) - std::get<Y_AXIS>(g92_offset) + (this->is_scara)?0:std::get<Y_AXIS>(tool_offset);
-                target[Y_AXIS]= param[Y_AXIS] + std::get<Y_AXIS>(wcs_offsets[current_wcs]) - std::get<Y_AXIS>(g92_offset) + std::get<Y_AXIS>(tool_offset);
+                target[Y_AXIS]= param[Y_AXIS] + std::get<Y_AXIS>(wcs_offsets[current_wcs]) - std::get<Y_AXIS>(g92_offset);// + (this->is_scara)?0:std::get<Y_AXIS>(tool_offset);
+                //target[Y_AXIS]= param[Y_AXIS] + std::get<Y_AXIS>(wcs_offsets[current_wcs]) - std::get<Y_AXIS>(g92_offset) + std::get<Y_AXIS>(tool_offset);
             }
 
             if(!isnan(param[Z_AXIS])) {
@@ -1565,6 +1613,11 @@ void Robot::clearToolOffset()
 void Robot::setToolOffset(const float offset[3])
 {
     this->tool_offset= wcs_t(offset[0], offset[1], offset[2]);
+}
+
+std::tuple<float, float, float> Robot::getToolOffset()
+{
+    return this->tool_offset;
 }
 
 float Robot::get_feed_rate() const
