@@ -116,6 +116,7 @@ void SlowTicker::on_idle(void*)
     if(THEKERNEL->is_using_leds()) {
         // flash led 3 to show we are alive
         leds[2]= (ledcnt++ & 0x1000) ? 1 : 0;
+        leds[1]= leds[2];
     }
 
     // if interrupt has set the 1 second flag
