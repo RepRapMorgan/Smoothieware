@@ -263,7 +263,7 @@ int main()
 {
     init();
 
-    uint16_t cnt= 0;
+    //uint16_t cnt= 0;
     // Main loop
     while(1){
         //if(THEKERNEL->is_using_leds()) {
