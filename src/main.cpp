@@ -85,7 +85,7 @@ SDFAT mounter __attribute__ ((section ("AHBSRAM0"))) ("sd", &sd);
 GPIO leds[5] = {
     GPIO(P1_18),
     GPIO(P2_11),  //P1_19),
-    GPIO(P1_20),
+    GPIO(P1_19),  //P1_20),
     GPIO(P1_21),
     GPIO(P4_28)
 };
