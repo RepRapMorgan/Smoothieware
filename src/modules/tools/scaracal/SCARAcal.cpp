@@ -254,6 +254,8 @@ void SCARAcal::on_gcode_received(void *argument)
 
                     STEPPER[0]->change_steps_per_mm(actuators[0] / target[0] * STEPPER[0]->get_steps_per_mm()); // Find angle difference
                     STEPPER[1]->change_steps_per_mm(STEPPER[0]->get_steps_per_mm());  // and change steps_per_mm to ensure correct steps per *angle*
+
+                    SCARA_ang_move(120.0F, 220.0F, cartesian[2], slow_rate * 3.0F); // move to safe position after setting steps
                 } else {
                     this->home();                                                   // home - This time leave trims as adjusted.
                     THEROBOT->get_axis_position(cartesian);    // get actual position from robot
@@ -292,6 +294,8 @@ void SCARAcal::on_gcode_received(void *argument)
 
                     STEPPER[1]->change_steps_per_mm(actuators[1] / target[1] * STEPPER[1]->get_steps_per_mm()); // Find angle difference
                     //STEPPER[1]->change_steps_per_mm(STEPPER[0]->get_steps_per_mm());  // and change steps_per_mm to ensure correct steps per *angle*
+
+                    SCARA_ang_move(120.0F, 220.0F, cartesian[2], slow_rate * 3.0F); // move to safe position after setting steps
                 } else {
                     this->home();                                                   // home - This time leave trims as adjusted.
                     THEROBOT->get_axis_position(cartesian);    // get actual position from robot
