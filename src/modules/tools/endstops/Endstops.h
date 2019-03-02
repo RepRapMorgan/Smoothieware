@@ -31,6 +31,7 @@ class Endstops : public Module{
         using axis_bitmap_t = std::bitset<6>;
         void home(axis_bitmap_t a);
         void home_xy();
+        void home_xyz();
         void back_off_home(axis_bitmap_t axis);
         void move_to_origin(axis_bitmap_t axis);
         void on_get_public_data(void* argument);
