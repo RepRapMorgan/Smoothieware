@@ -1,4 +1,4 @@
-/*
+                    /*
       This file is part of Smoothie (http://smoothieware.org/). The motion control part is heavily based on Grbl (https://github.com/simen/grbl).
       Smoothie is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
       Smoothie is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
@@ -92,6 +92,7 @@ class Robot : public Module {
             uint8_t plane_axis_0:2;                           // Current plane ( XY, XZ, YZ )
             uint8_t plane_axis_1:2;
             uint8_t plane_axis_2:2;
+            bool software_limits:1;                           // true if system is bound by software limits: default is false
         };
 
     private:
@@ -138,6 +139,8 @@ class Robot : public Module {
         float default_acceleration;                          // the defualt accleration if not set for each axis
         float s_value;                                       // modal S value
         float arc_milestone[3];                              // used as start of an arc command
+
+        float softlimits[3][2];                              // minimum and maximum movement limits
 
         // Number of arc generation iterations by small angle approximation before exact arc trajectory
         // correction. This parameter may be decreased if there are issues with the accuracy of the arc
