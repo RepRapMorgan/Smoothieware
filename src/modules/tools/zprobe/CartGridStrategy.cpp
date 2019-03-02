@@ -328,8 +328,12 @@ bool CartGridStrategy::load_grid(StreamOutput *stream)
                 return false;
             } else {
                 if (read_value != grid[x + (configured_grid_x_size * y)]) {
+                    //stream->printf("*");  // DEBUG
                     grid[x + (configured_grid_x_size * y)] = read_value;
-                }
+                } //else {
+                  //  stream->printf("@");  // DEBUG
+                //}
+
             }
         }
     }
@@ -516,7 +520,7 @@ bool CartGridStrategy::doProbe(Gcode *gc)
     }
 
     setAdjustFunction(false);
-    reset_bed_level();
+    // reset_bed_level(); // trying to limit excessive program memory writes
 
     if(gc->has_letter('I')) current_grid_x_size = gc->get_value('I'); // override default grid x size
     if(gc->has_letter('J')) current_grid_y_size = gc->get_value('J'); // override default grid y size
@@ -596,6 +600,8 @@ bool CartGridStrategy::doProbe(Gcode *gc)
         gc->stream->printf("     Remove probe\n");
         gc->stream->printf(" ********************\n");
     }
+
+    grid_init = true;
 
     setAdjustFunction(true);
 
