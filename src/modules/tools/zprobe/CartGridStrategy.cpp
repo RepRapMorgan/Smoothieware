@@ -137,10 +137,10 @@ bool CartGridStrategy::handleConfig()
     do_home = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, do_home_checksum)->by_default(true)->as_bool();
     only_by_two_corners = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, only_by_two_corners_checksum)->by_default(false)->as_bool();
     human_readable = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, human_readable_checksum)->by_default(false)->as_bool();
+    do_manual_attach = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, m_attach_checksum)->by_default(false)->as_bool();
 
     this->height_limit = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, height_limit_checksum)->by_default(NAN)->as_number();
     this->dampening_start = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, dampening_start_checksum)->by_default(NAN)->as_number();
-    do_manual_attach = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, m_attach_checksum)->by_default(false)->as_bool();
 
     if(!isnan(this->height_limit) && !isnan(this->dampening_start)) {
         this->damping_interval = height_limit - dampening_start;
@@ -188,7 +188,8 @@ bool CartGridStrategy::handleConfig()
         return false;
     }
 
-    reset_bed_level();
+    //reset_bed_level();
+    grid_init = false;   // Indicates that grid is not initialised
 
     return true;
 }
@@ -200,7 +201,7 @@ void CartGridStrategy::save_grid(StreamOutput *stream)
         return;
     }
 
-    if(isnan(grid[0])) {
+    if(isnan(grid[0]) || !grid_init) {
         stream->printf("error:No grid to save\n");
         return;
     }
@@ -320,13 +321,21 @@ bool CartGridStrategy::load_grid(StreamOutput *stream)
 
     for (int y = 0; y < configured_grid_y_size; y++) {
         for (int x = 0; x < configured_grid_x_size; x++) {
-            if(fread(&grid[x + (configured_grid_x_size * y)], sizeof(float), 1, fp) != 1) {
+            float read_value;
+            if(fread(&read_value , sizeof(float), 1, fp) != 1) {
                 stream->printf("error:Failed to read grid\n");
                 fclose(fp);
                 return false;
+            } else {
+                if (read_value != grid[x + (configured_grid_x_size * y)]) {
+                    grid[x + (configured_grid_x_size * y)] = read_value;
+                }
             }
         }
     }
+
+    grid_init = true;
+
     stream->printf("grid loaded, grid: (%f, %f), size: %d x %d\n", x_size, y_size, load_grid_x_size, load_grid_y_size);
     fclose(fp);
     return true;
@@ -709,5 +718,7 @@ void CartGridStrategy::reset_bed_level()
         for (int x = 0; x < current_grid_x_size; x++) {
             grid[x + (current_grid_x_size * y)] = NAN;
         }
+
+        grid_init = false;
     }
 }
