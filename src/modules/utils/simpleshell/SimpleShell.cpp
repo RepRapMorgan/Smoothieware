@@ -12,7 +12,7 @@
 #include "libs/utils.h"
 #include "libs/SerialMessage.h"
 #include "libs/StreamOutput.h"
-#include "modules/robot/Conveyor.h"
+#include "Conveyor.h"
 #include "DirHandle.h"
 #include "mri.h"
 #include "version.h"
@@ -219,6 +219,11 @@ void SimpleShell::on_console_line_received( void *argument )
                 new_message.stream->printf("ok\n");
                 break;
 
+            case 'I':
+                // issue get state for smoopi
+                get_command("state", new_message.stream);
+                break;
+
             case 'X':
                 if(THEKERNEL->is_halted()) {
                     THEKERNEL->call_event(ON_HALT, (void *)1); // clears on_halt
@@ -242,6 +247,15 @@ void SimpleShell::on_console_line_received( void *argument )
                     THEKERNEL->call_event(ON_GCODE_RECEIVED, &gcode);
                 }
                 new_message.stream->printf("ok\n");
+                break;
+
+            case 'S':
+                switch_command(possible_command, new_message.stream);
+                break;
+
+            case 'J':
+                // instant jog command
+                jog(possible_command, new_message.stream);
                 break;
 
             default:
@@ -270,9 +284,9 @@ void SimpleShell::on_console_line_received( void *argument )
         } else if (cmd == "fire") {
             // these are handled by Laser module
 
-        } else if (cmd == "ok") {
-            // probably an echo so reply ok
-            new_message.stream->printf("ok\n");
+        } else if (cmd.substr(0, 2) == "ok") {
+            // probably an echo so ignore the whole line
+            //new_message.stream->printf("ok\n");
 
         }else if(!parse_command(cmd.c_str(), possible_command, new_message.stream)) {
             new_message.stream->printf("error:Unsupported command - %s\n", cmd.c_str());
@@ -487,10 +501,7 @@ void SimpleShell::upload_command( string parameters, StreamOutput *stream )
                 uploading= false;
 
             } else {
-                if ((cnt%400) == 0) {
-                    // HACK ALERT to get around fwrite corruption close and re open for append
-                    fclose(fd);
-                    fd = fopen(upload_filename.c_str(), "a");
+                if ((cnt%1000) == 0) {
                     // we need to kick things or they die
                     THEKERNEL->call_event(ON_IDLE);
                 }
@@ -899,7 +910,8 @@ void SimpleShell::calc_thermistor_command( string parameters, StreamOutput *stre
             stream->printf("  Paste the above in the M305 S0 command, then save with M500\n");
         }else{
             char buf[80];
-            int n = snprintf(buf, sizeof(buf), "M305 S%d I%1.18f J%1.18f K%1.18f", saveto, c1, c2, c3);
+            size_t n = snprintf(buf, sizeof(buf), "M305 S%d I%1.18f J%1.18f K%1.18f", saveto, c1, c2, c3);
+            if(n > sizeof(buf)) n= sizeof(buf);
             string g(buf, n);
             Gcode gcode(g, &(StreamOutput::NullStream));
             THEKERNEL->call_event(ON_GCODE_RECEIVED, &gcode );
@@ -916,8 +928,28 @@ void SimpleShell::calc_thermistor_command( string parameters, StreamOutput *stre
 // set or get switch state for a named switch
 void SimpleShell::switch_command( string parameters, StreamOutput *stream)
 {
-    string type = shift_parameter( parameters );
-    string value = shift_parameter( parameters );
+    string type;
+    string value;
+
+    if(parameters[0] == '$') {
+        // $S command
+        type = shift_parameter( parameters );
+        while(!type.empty()) {
+            struct pad_switch pad;
+            bool ok = PublicData::get_value(switch_checksum, get_checksum(type), 0, &pad);
+            if(ok) {
+                stream->printf("switch %s is %d\n", type.c_str(), pad.state);
+            }
+
+            type = shift_parameter( parameters );
+        }
+        return;
+
+    }else{
+        type = shift_parameter( parameters );
+        value = shift_parameter( parameters );
+    }
+
     bool ok = false;
     if(value.empty()) {
         // get switch state
@@ -1123,7 +1155,7 @@ void SimpleShell::test_command( string parameters, StreamOutput *stream)
         // reset the position based on current actuator position
         THEROBOT->reset_position_from_current_actuator_position();
 
-        stream->printf("done\n");
+        //stream->printf("done\n");
 
     }else {
         stream->printf("usage:\n test jog axis distance iterations [feedrate]\n");
@@ -1131,6 +1163,56 @@ void SimpleShell::test_command( string parameters, StreamOutput *stream)
         stream->printf(" test circle radius iterations [feedrate]\n");
         stream->printf(" test raw axis steps steps/sec\n");
     }
+}
+
+void SimpleShell::jog(string parameters, StreamOutput *stream)
+{
+    // $J X0.1 F0.5
+    int n_motors= THEROBOT->get_number_registered_motors();
+
+    // get axis to move and amount (X0.1)
+    // for now always 1 axis
+    size_t npos= parameters.find_first_of("XYZABC");
+    if(npos == string::npos) {
+        stream->printf("usage: $J X0.01 [F0.5] - axis can be one of XYZABC, optional speed is scale of max_rate\n");
+        return;
+    }
+
+    string s = parameters.substr(npos);
+    if(s.empty() || s.size() < 2) {
+        stream->printf("usage: $J X0.01 [F0.5]\n");
+        return;
+    }
+    char ax= toupper(s[0]);
+    uint8_t a= ax >= 'X' ? ax - 'X' : ax - 'A' + 3;
+    if(a >= n_motors) {
+        stream->printf("error:bad axis\n");
+        return;
+    }
+
+    float d= strtof(s.substr(1).c_str(), NULL);
+
+    float delta[n_motors];
+    for (int i = 0; i < n_motors; ++i) {
+        delta[i]= 0;
+    }
+    delta[a]= d;
+
+    // get speed scale
+    float scale= 1.0F;
+    npos= parameters.find_first_of("F");
+    if(npos != string::npos && npos+1 < parameters.size()) {
+        scale= strtof(parameters.substr(npos+1).c_str(), NULL);
+    }
+
+    THEROBOT->push_state();
+    float rate_mm_s= THEROBOT->actuators[a]->get_max_rate() * scale;
+    THEROBOT->delta_move(delta, rate_mm_s, n_motors);
+
+    // turn off queue delay and run it now
+    THECONVEYOR->force_queue();
+    THEROBOT->pop_state();
+    //stream->printf("Jog: %c%f F%f\n", ax, d, scale);
 }
 
 void SimpleShell::help_command( string parameters, StreamOutput *stream )
