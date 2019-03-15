@@ -21,22 +21,22 @@ public:
 private:
 
     bool doProbe(Gcode *gc);
-    bool findBed();
+    bool scan_bed(Gcode *gc);
+    bool findBed(float x, float y);
     void setAdjustFunction(bool on);
     void print_bed_level(StreamOutput *stream);
     void doCompensation(float *target, bool inverse);
     void reset_bed_level();
     void save_grid(StreamOutput *stream);
     bool load_grid(StreamOutput *stream);
-    bool probe_grid(int n, int m, float _x_start, float _y_start, float _x_size, float _y_size, StreamOutput *stream);
 
     float initial_height;
-    float tolerance; 
-	
+    float tolerance;
+
     float height_limit;
-    float dampening_start; 
+    float dampening_start;
     float damping_interval;
-	
+
     float *grid;
     std::tuple<float, float, float> probe_offsets;
     std::tuple<float, float, float> m_attach;
@@ -56,5 +56,6 @@ private:
         bool do_manual_attach:1;
         bool only_by_two_corners:1;
         bool human_readable:1;
+        bool new_file_format:1;
     };
 };
