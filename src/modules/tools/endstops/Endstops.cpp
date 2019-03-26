@@ -1051,6 +1051,21 @@ void Endstops::set_relative_homing_offset(Gcode *gcode)
     gcode->stream->printf("Homing Offset: X %5.3f Y %5.3f Z %5.3f\n", homing_axis[X_AXIS].home_offset, homing_axis[Y_AXIS].home_offset, homing_axis[Z_AXIS].home_offset);
 }
 
+/*bool Endstops::set_Zprobe_offset(float z, StreamOutput *stream)
+{
+    char cmd[64];
+
+    // Assemble Gcode to add onto the queue
+    snprintf(cmd, sizeof(cmd), "M565 Z%1.3f", z); // Send Z probe offset
+
+    Gcode gc(cmd, &(StreamOutput::NullStream));
+    THEKERNEL->call_event(ON_GCODE_RECEIVED, &gc);
+
+    stream->printf("Set probe_offset to Z:%f\n", z);
+
+    return true;//ok;
+}*/
+
 void Endstops::handle_park(Gcode * gcode)
 {
     // TODO: spec says if XYZ specified move to them first then move to MCS of specifed axis
@@ -1196,6 +1211,13 @@ void Endstops::on_gcode_received(void *argument)
                 if (gcode->subcode == 1){
                     set_relative_homing_offset(gcode);
                 }
+                /*else if (gcode->subcode == 2){
+                    //set_relative_homing_offset(gcode);
+                    // Change the probe offset seting as well as homing offset.
+                    // The result is machines that are closer to proper calibration after running the probe.
+                    set_probe_offset
+                    set_homing_offset(gcode);
+                }*/
                 else {
                     set_homing_offset(gcode);
                 }
