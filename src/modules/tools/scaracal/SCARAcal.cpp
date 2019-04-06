@@ -89,9 +89,9 @@ bool SCARAcal::set_trim(float x, float y, float z, StreamOutput *stream)
     bool ok= PublicData::set_value( endstops_checksum, trim_checksum, t);
 
     if (ok) {
-        stream->printf("set trim to X:%f Y:%f Z:%f\n", x, y, z);
+        stream->printf("Set trim to X:%f Y:%f Z:%f\n", x, y, z);
     } else {
-        stream->printf("unable to set trim, is endstops enabled?\n");
+        stream->printf("Unable to set trim, is endstops enabled?\n");
     }
 
     return ok;
@@ -289,6 +289,7 @@ void SCARAcal::on_gcode_received(void *argument)
                       cartesian[3];
 
                 THEROBOT->software_limits = false;
+                gcode->stream->printf("Software limis = %i\n", THEROBOT->software_limits);
 
                 gcode->stream->printf("Target: T %f P %f\n", target[0], target[1]);
 
