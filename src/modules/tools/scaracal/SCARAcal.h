@@ -37,9 +37,28 @@ private:
     bool translate_trim(StreamOutput *stream);
 
     void SCARA_ang_move(float theta, float psi, float z, float feedrate);
+    void SCARA_abs_move(float x, float y, float z, float feedrate);
+    void SCARA_send_move(char* cmd);
 
     float slow_rate;
     float z_move;
+    int   calpos;
+
+    int procal[11][2] = {  
+        {190, 110} ,  
+        {190, 210} ,   
+        {100, 160} ,   
+        {100, 60} ,  
+        {190, 10} ,   
+        {280, 60} ,   
+        {280, 160} ,   
+        {10, 110} ,   
+        {10, 10} ,   
+        {370, 10} ,   
+        {370, 110}   
+    };
+
+    float promeasure[11][2];
 
     struct {
         bool           is_scara:1;

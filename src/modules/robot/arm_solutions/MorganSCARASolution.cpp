@@ -5,6 +5,7 @@
 #include "ConfigValue.h"
 #include "libs/Kernel.h"
 #include "StreamOutputPool.h"
+#include "Robot.h"
 
 #include "libs/nuts_bolts.h"
 
@@ -81,8 +82,11 @@ void MorganSCARASolution::cartesian_to_actuator(const float cartesian_mm[], Actu
     // SCARA position is undefined if abs(SCARA_C2) >=1
     // In reality abs(SCARA_C2) >0.95 can be problematic.
 
-    if (SCARA_C2 > this->morgan_undefined_max)
-        SCARA_C2 = this->morgan_undefined_max;
+    if (SCARA_C2 > this->morgan_undefined_max){
+        if (THEROBOT->software_limits){
+            SCARA_C2 = this->morgan_undefined_max;
+        }
+    }
     else if (SCARA_C2 < -this->morgan_undefined_min)
         SCARA_C2 = -this->morgan_undefined_min;
 
@@ -146,6 +150,11 @@ bool MorganSCARASolution::set_optional(const arm_options_t& options)
     i = options.find('P');         // Psi arm2 length
     if(i != options.end()) {
         arm2_length = i->second;
+    }
+    i = options.find('Q');         // Theta arm1 length
+    if(i != options.end()) {
+        arm1_length = i->second;
+
     }
     i = options.find('X');         // Home initial position X
     if(i != options.end()) {

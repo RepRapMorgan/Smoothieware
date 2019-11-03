@@ -21,8 +21,11 @@
 #include "SerialMessage.h"
 #include "EndstopsPublicAccess.h"
 #include "PublicData.h"
+#include "StringStream.h"
+
 #include <algorithm>
 #include <map>
+#include <string>
 
 #define scaracal_checksum CHECKSUM("scaracal")
 #define enable_checksum CHECKSUM("enable")
@@ -57,7 +60,8 @@ void SCARAcal::on_config_reload(void *argument)
     this->z_move = THEKERNEL->config->value( scaracal_checksum, z_move_checksum )->by_default(0)->as_number(); // Optional movement of Z relative to the home position.
                                                                                                   // positive values increase distance between nozzle and bed.
                                                                                                   // negative will decrease.  Useful when level code active to prevent collision
-
+    // TODO: Init procal with values from config
+    this->calpos = 99;
 }
 
 
@@ -160,7 +164,6 @@ bool SCARAcal::translate_trim(StreamOutput *stream)
 
 void SCARAcal::SCARA_ang_move(float theta, float psi, float z, float feedrate)
 {
-    char cmd[64];
     float cartesian[3];
     ActuatorCoordinates actuator;
 
@@ -172,10 +175,23 @@ void SCARAcal::SCARA_ang_move(float theta, float psi, float z, float feedrate)
     // Calculate the physical position relating to the arm angles
     THEROBOT->arm_solution->actuator_to_cartesian( actuator, cartesian );
 
-    // Assemble Gcode to add onto the queue
-    snprintf(cmd, sizeof(cmd), "G0 X%1.3f Y%1.3f Z%1.3f F%1.1f", cartesian[0], cartesian[1], cartesian[2], feedrate * 60); // use specified feedrate (mm/sec)
+    this->SCARA_abs_move(cartesian[0], cartesian[1], cartesian[2], feedrate);
+}
 
-    //THEKERNEL->streams->printf("DEBUG: move: %s\n", cmd);
+void SCARAcal::SCARA_abs_move(float x, float y, float z, float feedrate)
+{
+    char cmd[64];
+    
+    // Assemble Gcode to add onto the queue
+    snprintf(cmd, sizeof(cmd), "G0 X%1.3f Y%1.3f Z%1.3f F%1.1f", x, y, z, feedrate * 60); // use specified feedrate (mm/sec)
+
+    this->SCARA_send_move(cmd);
+}
+
+void SCARAcal::SCARA_send_move(char* cmd)
+{
+    // DEBUG 
+    THEKERNEL->streams->printf("%s\n",cmd);
 
     Gcode gc(cmd, &(StreamOutput::NullStream));
     THEROBOT->on_gcode_received(&gc); // send to robot directly
@@ -206,7 +222,7 @@ void SCARAcal::on_gcode_received(void *argument)
             break;
 
             case 360: {
-                float target[2] = {0.0F, 120.0F},
+                float target[2] = {0.0F, 150.0F},
                       cartesian[3],
                       S_trim[3];
 
@@ -241,7 +257,7 @@ void SCARAcal::on_gcode_received(void *argument)
                     THEROBOT->software_limits = false;
 
                     target[0] = 180.0F;
-                    target[1] = 225.0F;
+                    target[1] = 280.0F;
                 } else {
                     target[0] = 90.0F;
                     target[1] = 130.0F;
@@ -314,10 +330,20 @@ void SCARAcal::on_gcode_received(void *argument)
             break;
 
             case 364: {
-                float target[2] = {45.0F, 135.0F},
+                float target[2],
                       cartesian[3],
                       S_trim[3];
+                
+                if(gcode->subcode == 1){ // 180 degree condition
+                    THEROBOT->software_limits = false;
 
+                    target[0] = 135.0F;
+                    target[1] = 135.0F;
+                } else {
+                    target[0] = 45.0F;
+                    target[1] = 135.0F;
+                }
+                
                 this->get_trim(S_trim[0], S_trim[1], S_trim[2]);	// get current trim to conserve other calbration values
 
                 if(gcode->has_letter('P')) {
@@ -329,7 +355,7 @@ void SCARAcal::on_gcode_received(void *argument)
                         THEROBOT->get_axis_position(cartesian);                                     // get actual position from robot
                         THEROBOT->arm_solution->cartesian_to_actuator( cartesian, actuators );      // translate it to get actual actuator angles
 
-                    if (pval == 0.0 || pval == 180.0) {
+                    if (pval == 0.0) {
                     
                         S_delta[1] = ( actuators[1] - actuators[0]) - ( target[1] - target[0] );            // Find difference in angle - not actuator difference, and
                         
@@ -345,9 +371,118 @@ void SCARAcal::on_gcode_received(void *argument)
                     set_trim(S_trim[0], 0, S_trim[2], gcode->stream);                                           // reset trim for calibration move
                     this->home();                                                                       // home
                     THEROBOT->get_axis_position(cartesian);    // get actual position from robot
-                    SCARA_ang_move(target[0], target[1], 50, slow_rate * 3.0F);                     // move to target
+                    this->SCARA_ang_move(target[0], target[1], 50, slow_rate * 3.0F);                     // move to target
                 }
             }
+            break;
+
+            case 365:
+            // Run arm calbration probe routine
+                
+
+                if(gcode->subcode == 1){   // Continue operation after moving arm into position
+                    if (calpos<11){
+                        char cmd[64];
+                        float cartesian[3], pos[3];
+                        int axis, probe_dir;
+                        StringStream string_stream;
+                        
+                        //switch(axis) {
+                        //    case X_AXIS: cmd.append(probe_dir ? "X50" : "X-50"); break;
+                        //    case Y_AXIS: cmd.append(probe_dir ? "Y50" : "Y-50"); break;
+                        //    case Z_AXIS: cmd.append(probe_dir ? "Z50" : "Z-50"); break;
+                        //}
+
+                        // User moved the touch probe to better position manually if needed
+                        // Probe finds X center, then Y center and repeats.
+                        promeasure[calpos][X_AXIS] = NAN;
+                        promeasure[calpos][Y_AXIS] = NAN;
+
+                        for (axis = 0; axis < 2; axis++){
+                            promeasure[calpos][axis] = 0.0;
+                            for (probe_dir = 0; probe_dir < 2; probe_dir++){
+                                THEROBOT->get_axis_position(cartesian);                                     // get actual position from robot
+                        
+                                //string cmd("G38.3 X8");                       
+                                snprintf(cmd, sizeof(cmd), "G38.2 %c%s", 'X' + axis, probe_dir ? "-8" : "8"); // 
+                                //snprintf(cmd, sizeof(cmd), "G38.2 X8"); // 
+                                //cmd.append("X8");
+                            
+                                //this->SCARA_send_move(cmd);
+                            
+                                // first wait for all moves to finish
+                                //THEKERNEL->conveyor->wait_for_idle();
+
+                                struct SerialMessage message;
+                                message.message = cmd;
+                                message.stream = &string_stream;
+                                THEKERNEL->call_event(ON_CONSOLE_LINE_RECEIVED, &message );
+                                if(THEKERNEL->is_halted()) return;
+                            
+                                THEROBOT->get_axis_position(pos, 3);   // get actual value again to deduce probe position
+                                promeasure[calpos][axis] += pos[axis]; // add the values
+                            
+                                
+                                
+                                 
+                            
+                                this->SCARA_abs_move(cartesian[0],cartesian[1],NAN,500); // move back for second move
+                            }
+                            
+
+                            THEROBOT->get_axis_position(pos, 3);
+                            promeasure[calpos][axis] /= 2;
+                            this->SCARA_abs_move(axis ? NAN : promeasure[calpos][X_AXIS], axis ? promeasure[calpos][Y_AXIS] : NAN,NAN,500); // move to new center
+                        }
+
+
+                        calpos++;
+                        this->SCARA_abs_move(NAN,NAN,20,500); // Lift the head first
+                        if (calpos < 11){
+                            this->SCARA_abs_move(procal[calpos][0],procal[calpos][1],20,500); // Move to new position
+                        };
+
+
+
+                    } else if (calpos==11){
+
+                        int i;
+
+                        gcode->stream->printf("\nXsol,Ysol,Xist,Yist\n");
+
+                        for (i=0; i<11; i++){
+                            gcode->stream->printf("%i,%i,%f,%f\n", procal[i][X_AXIS],procal[i][Y_AXIS],promeasure[i][X_AXIS], promeasure[i][Y_AXIS]);
+
+
+                            
+                        }
+                        calpos = 99;
+                    }
+
+
+
+                } else {
+                    if(gcode->has_letter('P')) {
+                        float pval = gcode->get_value('P');
+
+                        if (pval == 2014){
+                            // Initialize calibrator. Ensure that the calbrator tip Z has been set to the calibrator plate
+                            // This will move the arm to the first calibration position, 10mm above the calibrator plate.
+
+                            // move the tip close to the center of the calibration point if it is not close, and run:
+                            // M365.1
+
+                            this->calpos = 0; // Start position
+
+                            this->home(); // Home the machine
+                            this->SCARA_abs_move(procal[calpos][0],procal[calpos][1],20,1000);  //move to first position
+                            
+                        }
+
+                    }
+
+
+                }
             break;
 
             case 366:                                       // Translate trims to the actual endstop offsets for SCARA

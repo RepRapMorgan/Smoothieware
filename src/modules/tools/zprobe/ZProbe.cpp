@@ -255,6 +255,8 @@ void ZProbe::on_gcode_received(void *argument)
 {
     Gcode *gcode = static_cast<Gcode *>(argument);
 
+    //gcode->stream->printf("DEBUG: We are in Zprobe:on_gcode_received\n");
+
     if( gcode->has_g && gcode->g >= 29 && gcode->g <= 32) {
 
         invert_probe = false;
