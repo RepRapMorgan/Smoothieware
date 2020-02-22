@@ -633,7 +633,7 @@ bool CartGridStrategy::doProbe(Gcode *gc)
         zprobe->coordinated_move( m_attach[0], m_attach[1], m_attach[2], zprobe->getFastFeedrate());
 
         gc->stream->printf(" ************************************************************\n");
-        gc->stream->printf("     Ensure probe is attached and trigger probe when done\n");
+        gc->stream->printf(" *   Ensure probe is attached and trigger probe when done   *\n");
         gc->stream->printf(" ************************************************************\n");
 
         while( !zprobe->getProbeStatus()) {

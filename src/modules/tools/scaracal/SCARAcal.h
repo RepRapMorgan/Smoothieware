@@ -42,6 +42,8 @@ private:
 
     float slow_rate;
     float z_move;
+    float pointcal_d;
+    float pointcal_zh;
     int   calpos;
 
     int procal[11][2] = {  

@@ -74,10 +74,10 @@ void MorganSCARASolution::cartesian_to_actuator(const float cartesian_mm[], Actu
     SCARA_pos[Y_AXIS] = (cartesian_mm[Y_AXIS]  * this->morgan_scaling_y - this->morgan_offset_y);  // morgan_offset not to be confused with home offset. This makes the SCARA math work.
     // Y has to be scaled before subtracting offset to ensure position on bed.
 
-    if (this->arm1_length == this->arm2_length)
-        SCARA_C2 = (SQ(SCARA_pos[X_AXIS]) + SQ(SCARA_pos[Y_AXIS]) - 2.0f * SQ(this->arm1_length)) / (2.0f * SQ(this->arm1_length));
-    else
-        SCARA_C2 = (SQ(SCARA_pos[X_AXIS]) + SQ(SCARA_pos[Y_AXIS]) - SQ(this->arm1_length) - SQ(this->arm2_length)) / (2.0f * this->arm1_length * this->arm2_length);
+    //if (this->arm1_length == this->arm2_length)
+    //    SCARA_C2 = (SQ(SCARA_pos[X_AXIS]) + SQ(SCARA_pos[Y_AXIS]) - 2.0f * SQ(this->arm1_length)) / (2.0f * SQ(this->arm1_length));
+    //else
+    SCARA_C2 = (SQ(SCARA_pos[X_AXIS]) + SQ(SCARA_pos[Y_AXIS]) - SQ(this->arm1_length) - SQ(this->arm2_length)) / (2.0f * this->arm1_length * this->arm2_length);
 
     // SCARA position is undefined if abs(SCARA_C2) >=1
     // In reality abs(SCARA_C2) >0.95 can be problematic.
@@ -93,7 +93,7 @@ void MorganSCARASolution::cartesian_to_actuator(const float cartesian_mm[], Actu
 
     SCARA_S2 = sqrtf(1.0f - SQ(SCARA_C2));
 
-    SCARA_K1 = this->arm1_length + this->arm2_length * SCARA_C2;
+    SCARA_K1 = this->arm1_length + (this->arm2_length * SCARA_C2);
     SCARA_K2 = this->arm2_length * SCARA_S2;
 
     SCARA_theta = (atan2f(SCARA_pos[X_AXIS], SCARA_pos[Y_AXIS]) - atan2f(SCARA_K1, SCARA_K2)) * -1.0f; // Morgan Thomas turns Theta in oposite direction
@@ -151,7 +151,7 @@ bool MorganSCARASolution::set_optional(const arm_options_t& options)
     if(i != options.end()) {
         arm2_length = i->second;
     }
-    i = options.find('Q');         // Theta arm1 length
+    i = options.find('O');         // Theta arm1 length
     if(i != options.end()) {
         arm1_length = i->second;
 
@@ -191,7 +191,7 @@ bool MorganSCARASolution::set_optional(const arm_options_t& options)
 
 bool MorganSCARASolution::get_optional(arm_options_t& options, bool force_all) const
 {
-    options['T'] = this->arm1_length;
+    options['O'] = this->arm1_length;   // T is used by another module.  It is now possible to set arm length on the fly.
     options['P'] = this->arm2_length;
     options['X'] = this->morgan_offset_x;
     options['Y'] = this->morgan_offset_y;
