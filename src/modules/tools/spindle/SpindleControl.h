@@ -17,7 +17,7 @@ class SpindleControl: public Module {
         virtual void on_module_loaded() {};
 
     protected:
-        bool spindle_on;
+        bool spindle_on, spindle_dir;
 
     private:
         void on_gcode_received(void *argument);
