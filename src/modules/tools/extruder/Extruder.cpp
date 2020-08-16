@@ -332,7 +332,7 @@ void Extruder::on_gcode_received(void *argument)
             gcode->stream->printf(";E Filament diameter:\nM200 D%1.4f P%d\n", this->filament_diameter, this->identifier);
             gcode->stream->printf(";E retract length, feedrate:\nM207 S%1.4f F%1.4f Z%1.4f Q%1.4f P%d\n", this->retract_length, this->retract_feedrate * 60.0F, this->retract_zlift_length, this->retract_zlift_feedrate * 60.0F, this->identifier);
             gcode->stream->printf(";E retract recover length, feedrate:\nM208 S%1.4f F%1.4f P%d\n", this->retract_recover_length, this->retract_recover_feedrate * 60.0F, this->identifier);
-            gcode->stream->printf(";E acceleration mm/sec²:\nM204 E%1.4f P%d\n", stepper_motor->get_acceleration(), this->identifier);
+            gcode->stream->printf(";E acceleration mm/sec^2:\nM204 E%1.4f P%d\n", stepper_motor->get_acceleration(), this->identifier);
             gcode->stream->printf(";E max feed rate mm/sec:\nM203 E%1.4f P%d\n", stepper_motor->get_max_rate(), this->identifier);
             if(this->max_volumetric_rate > 0) {
                 gcode->stream->printf(";E max volumetric rate mm³/sec:\nM203 V%1.4f P%d\n", this->max_volumetric_rate, this->identifier);
