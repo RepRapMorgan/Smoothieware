@@ -11,6 +11,9 @@
 #include "Conveyor.h"
 #include "SpindleControl.h"
 
+#define CW false
+#define CCW true
+
 void SpindleControl::on_gcode_received(void *argument) 
 {
     
@@ -42,6 +45,22 @@ void SpindleControl::on_gcode_received(void *argument)
             THECONVEYOR->wait_for_idle();
             // M3: Spindle on
             if(!spindle_on) {
+                spindle_dir = CW;
+                turn_on();
+            }
+            
+            // M3 with S value provided: set speed
+            if (gcode->has_letter('S'))
+            {
+                set_speed(gcode->get_value('S'));
+            }
+        }
+        else if (gcode->m == 4)
+        {
+            THECONVEYOR->wait_for_idle();
+            // M4: Spindle on
+            if(!spindle_on) {
+                spindle_dir = CCW;
                 turn_on();
             }
             

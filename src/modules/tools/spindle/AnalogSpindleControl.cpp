@@ -21,6 +21,7 @@
 #define spindle_pwm_pin_checksum            CHECKSUM("pwm_pin")
 #define spindle_pwm_period_checksum         CHECKSUM("pwm_period")
 #define spindle_switch_on_pin_checksum      CHECKSUM("switch_on_pin")
+#define spindle_direction_pin_checksum      CHECKSUM("direction_pin")
 
 void AnalogSpindleControl::on_module_loaded()
 {
@@ -59,10 +60,23 @@ void AnalogSpindleControl::on_module_loaded()
         switch_on = new Pin();
         switch_on->from_string(switch_on_pin)->as_output()->set(false);
     }
+
+    // Get digital out pin for switching the direction (wired to a digital input on the VFD via an optocoupler)
+    std::string direction_pin = THEKERNEL->config->value(spindle_checksum, spindle_direction_pin_checksum)->by_default("nc")->as_string();
+    direction = NULL;
+    if(direction_pin.compare("nc") != 0) {
+        direction = new Pin();
+        direction->from_string(direction_pin)->as_output()->set(false);
+    }
 }
 
 void AnalogSpindleControl::turn_on() 
 {
+    // set the output for direction
+    if(direction != NULL) {
+        direction->set(spindle_dir);
+        //THEKERNEL->streams->printf("Spindle_dir = %s\n",spindle_dir?"CCW":"CW"); 
+    }
     // set the output for switching the VFD on
     if(switch_on != NULL) 
         switch_on->set(true); 
@@ -79,6 +93,12 @@ void AnalogSpindleControl::turn_off()
     spindle_on = false;
     // set the PWM value to 0 to make sure it stops
     update_pwm(0);
+
+    if(direction != NULL) {
+        direction->set(false); // Turn off the relay
+        //THEKERNEL->streams->printf("Spindle_dir = %s\n",spindle_dir?"CCW":"CW"); 
+    }
+    
 
 }
 

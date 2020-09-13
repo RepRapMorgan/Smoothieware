@@ -27,6 +27,7 @@ class AnalogSpindleControl: public SpindleControl {
     private:
        
         Pin *switch_on; // digital output for switching the VFD on 
+        Pin *direction; // digital output for switching direction 
         mbed::PwmOut *pwm_pin; // PWM output for spindle speed control
         bool output_inverted;
         
