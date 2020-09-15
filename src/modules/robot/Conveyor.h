@@ -35,6 +35,7 @@ public:
     void flush_queue(void);
     float get_current_feedrate() const { return current_feedrate; }
     void force_queue() { check_queue(true); }
+    void set_controlled_stop(bool f) { controlled_stop= f; }
 
     friend class Planner; // for queue
 
@@ -49,10 +50,11 @@ private:
     size_t queue_size;
     float current_feedrate{0}; // actual nominal feedrate that current block is running at in mm/sec
 
-    struct {
+    volatile struct {
         volatile bool running:1;
         volatile bool allow_fetch:1;
-        bool flush:1;
+        volatile bool flush:1;
+        volatile bool controlled_stop:1;
     };
 
 };

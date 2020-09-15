@@ -41,8 +41,6 @@
 #include <string>
 
 #define laser_checksum CHECKSUM("laser")
-#define baud_rate_setting_checksum CHECKSUM("baud_rate")
-#define uart0_checksum             CHECKSUM("uart0")
 
 #define base_stepping_frequency_checksum            CHECKSUM("base_stepping_frequency")
 #define microseconds_per_step_pulse_checksum        CHECKSUM("microseconds_per_step_pulse")
@@ -60,12 +58,14 @@ Kernel::Kernel()
     feed_hold = false;
     enable_feed_hold = false;
     bad_mcu= true;
+    stop_request= false;
 
     instance = this; // setup the Singleton instance of the kernel
 
     // serial first at fixed baud rate (DEFAULT_SERIAL_BAUD_RATE) so config can report errors to serial
     // Set to UART0, this will be changed to use the same UART as MRI if it's enabled
-    this->serial = new SerialConsole(USBTX, USBRX, DEFAULT_SERIAL_BAUD_RATE);
+    this->serial = new SerialConsole(0);
+    this->serial->init_uart(DEFAULT_SERIAL_BAUD_RATE);
 
     // Config next, but does not load cache yet
     this->config = new Config();
@@ -88,22 +88,22 @@ Kernel::Kernel()
 #if MRI_ENABLE != 0
     switch( __mriPlatform_CommUartIndex() ) {
         case 0:
-            this->serial = new(AHB0) SerialConsole(USBTX, USBRX, this->config->value(uart0_checksum, baud_rate_setting_checksum)->by_default(DEFAULT_SERIAL_BAUD_RATE)->as_number());
+            this->serial = new(AHB0) SerialConsole(0);
             break;
         case 1:
-            this->serial = new(AHB0) SerialConsole(  p13,   p14, this->config->value(uart0_checksum, baud_rate_setting_checksum)->by_default(DEFAULT_SERIAL_BAUD_RATE)->as_number());
+            this->serial = new(AHB0) SerialConsole(1);
             break;
         case 2:
-            this->serial = new(AHB0) SerialConsole(  p28,   p27, this->config->value(uart0_checksum, baud_rate_setting_checksum)->by_default(DEFAULT_SERIAL_BAUD_RATE)->as_number());
+            this->serial = new(AHB0) SerialConsole(2);
             break;
         case 3:
-            this->serial = new(AHB0) SerialConsole(   p9,   p10, this->config->value(uart0_checksum, baud_rate_setting_checksum)->by_default(DEFAULT_SERIAL_BAUD_RATE)->as_number());
+            this->serial = new(AHB0) SerialConsole(3);
             break;
     }
 #endif
     // default
     if(this->serial == NULL) {
-        this->serial = new(AHB0) SerialConsole(USBTX, USBRX, this->config->value(uart0_checksum, baud_rate_setting_checksum)->by_default(DEFAULT_SERIAL_BAUD_RATE)->as_number());
+        this->serial = new(AHB0) SerialConsole(0);
     }
 
     //some boards don't have leds.. TOO BAD!
@@ -314,6 +314,16 @@ void Kernel::add_module(Module* module)
 void Kernel::register_for_event(_EVENT_ENUM id_event, Module *mod)
 {
     this->hooks[id_event].push_back(mod);
+}
+
+// This will stop the que and stop further commands, and stop motors
+// Optionally used before on_halt() is sent to do a quick stop
+// May be called from an ISR
+void Kernel::immediate_halt()
+{
+    this->halted = true;
+    conveyor->flush_queue(); // make sure no queued up codes get through
+    for(auto &a : robot->actuators) a->stop_moving();
 }
 
 // Call a specific event with an argument
