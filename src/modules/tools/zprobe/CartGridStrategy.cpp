@@ -170,12 +170,12 @@ bool CartGridStrategy::handleConfig()
     this->x_size = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, x_size_checksum)->by_default(0.0F)->as_number();
     this->y_size = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, y_size_checksum)->by_default(0.0F)->as_number();
     if (this->x_size == 0.0F || this->y_size == 0.0F) {
-        THEKERNEL->streams->printf("Error: Invalid config, x_size and y_size must be defined\n");
+        printf("Error: Invalid config, x_size and y_size must be defined\n");
         return false;
     }
 
     // the initial height above the bed we stop the intial move down after home to find the bed
-    // this should be a height that is enough that the probe will not hit the bed and is an offset from max_z (can be set to 0 if max_z takes into account the probe offset)
+    // this should be a height that is enough that the probe will not hit the bed and is the actual z machine  position to move to
     this->initial_height = THEKERNEL->config->value(leveling_strategy_checksum, cart_grid_leveling_strategy_checksum, initial_height_checksum)->by_default(NAN)->as_number();
     if(initial_height <= 0) initial_height= NAN;
 
@@ -218,7 +218,7 @@ bool CartGridStrategy::handleConfig()
     grid = (float *)AHB0.alloc(configured_grid_x_size * configured_grid_y_size * sizeof(float));
 
     if(grid == nullptr) {
-        THEKERNEL->streams->printf("Error: Not enough memory\n");
+        printf("Error: Not enough memory\n");
         return false;
     }
 
@@ -386,13 +386,19 @@ bool CartGridStrategy::handleGcode(Gcode *gcode)
             if(!before_probe.empty()) {
                 Gcode gc(before_probe, &(StreamOutput::NullStream));
                 THEKERNEL->call_event(ON_GCODE_RECEIVED, &gc);
+                THEKERNEL->conveyor->wait_for_idle();
             }
 
             THEROBOT->disable_segmentation= true;
             if(!doProbe(gcode)) {
                 gcode->stream->printf("Probe failed to complete, check the initial probe height and/or initial_height settings\n");
             } else {
-                gcode->stream->printf("Probe completed. Enter M374 to save this grid\n");
+                gcode->stream->printf("Probe completed.");
+                if(!only_by_two_corners) {
+                    gcode->stream->printf(" Enter M374 to save this grid\n");
+                }else{
+                    gcode->stream->printf("\n");
+                }
             }
             THEROBOT->disable_segmentation= false;
 

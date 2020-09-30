@@ -567,6 +567,31 @@ void Robot::on_gcode_received(void *argument)
             case 20: this->inch_mode = true;   break;
             case 21: this->inch_mode = false;   break;
 
+            case 43:
+                if(gcode->subcode == 1 || gcode->subcode == 2) {
+                    float deltas[3]= {0, 0, 0};
+                    if(gcode->has_letter('X')) deltas[X_AXIS]= to_millimeters(gcode->get_value('X'));
+                    if(gcode->has_letter('Y')) deltas[Y_AXIS]= to_millimeters(gcode->get_value('Y'));
+                    if(gcode->has_letter('Z')) deltas[Z_AXIS]= to_millimeters(gcode->get_value('Z'));
+
+                    float x, y, z;
+                    std::tie(x, y, z) = tool_offset;
+                    if(deltas[X_AXIS] != 0) x += deltas[X_AXIS];
+                    if(deltas[Y_AXIS] != 0) y += deltas[Y_AXIS];
+                    if(deltas[Z_AXIS] != 0) z += deltas[Z_AXIS];
+                    tool_offset = wcs_t(x, y, z);
+
+                    if(gcode->subcode == 2) {
+                        // we also move
+                        delta_move(deltas, this->seek_rate / seconds_per_minute, 3);
+                    }
+                }
+                break;
+
+            case 49:
+                tool_offset = wcs_t(0, 0, 0);
+                break;
+
             case 54: case 55: case 56: case 57: case 58: case 59:
                 // select WCS 0-8: G54..G59, G59.1, G59.2, G59.3
                 current_wcs = gcode->g - 54;
@@ -903,6 +928,11 @@ void Robot::on_gcode_received(void *argument)
                     }
                     gcode->stream->printf("\n");
                 }
+                if(gcode->m == 503) {
+                    // show temporary settings
+                    gcode->stream->printf(";Temporary settings S - delta segs/sec, U - mm/line segment:\nM665 ");
+                    gcode->stream->printf("S%1.5f U%1.5f\n", this->delta_segments_per_second, this->mm_per_line_segment);
+                }
 
                 // save wcs_offsets and current_wcs
                 // TODO this may need to be done whenever they change to be compliant
@@ -1125,9 +1155,6 @@ void Robot::process_move(Gcode *gcode, enum MOTION_MODE_T motion_mode)
             break;
     }
 
-    // needed to act as start of next arc command
-    memcpy(arc_milestone, target, sizeof(arc_milestone));
-
     if(moved) {
         // set machine_position to the calculated target
         memcpy(machine_position, target, n_motors*sizeof(float));
@@ -1222,6 +1249,18 @@ void Robot::reset_position_from_current_actuator_position()
         actuators[i]->change_last_milestone(actuator_pos[i]); // this updates the last_milestone in the actuator
     }
     #endif
+}
+
+// this needs to be done if compensation is turned off for continuous jog
+void Robot::reset_compensated_machine_position()
+{
+    if(compensationTransform) {
+        compensationTransform= nullptr;
+        // we want to leave it where we have set Z, not where it ended up AFTER compensation so
+        // this should correct the Z position to the machine_position
+        is_g123= false; // we don't want the laser to fire
+        append_milestone(machine_position, this->seek_rate / 60.0F);
+    }
 }
 
 // Convert target (in machine coordinates) to machine_position, then convert to actuator position and append this to the planner
@@ -1551,17 +1590,16 @@ bool Robot::append_arc(Gcode * gcode, const float target[], const float offset[]
     }
 
     // Scary math.
-    // We need to use arc_milestone here to get accurate arcs as previous machine_position may have been skipped due to small movements
-    float center_axis0 = this->arc_milestone[this->plane_axis_0] + offset[this->plane_axis_0];
-    float center_axis1 = this->arc_milestone[this->plane_axis_1] + offset[this->plane_axis_1];
-    float linear_travel = target[this->plane_axis_2] - this->arc_milestone[this->plane_axis_2];
+    float center_axis0 = this->machine_position[this->plane_axis_0] + offset[this->plane_axis_0];
+    float center_axis1 = this->machine_position[this->plane_axis_1] + offset[this->plane_axis_1];
+    float linear_travel = target[this->plane_axis_2] - this->machine_position[this->plane_axis_2];
     float r_axis0 = -offset[this->plane_axis_0]; // Radius vector from center to start position
     float r_axis1 = -offset[this->plane_axis_1];
-    float rt_axis0 = target[this->plane_axis_0] - this->arc_milestone[this->plane_axis_0] - offset[this->plane_axis_0]; // Radius vector from center to target position
-    float rt_axis1 = target[this->plane_axis_1] - this->arc_milestone[this->plane_axis_1] - offset[this->plane_axis_1];
+    float rt_axis0 = target[this->plane_axis_0] - this->machine_position[this->plane_axis_0] - offset[this->plane_axis_0]; // Radius vector from center to target position
+    float rt_axis1 = target[this->plane_axis_1] - this->machine_position[this->plane_axis_1] - offset[this->plane_axis_1];
     float angular_travel = 0;
     //check for condition where atan2 formula will fail due to everything canceling out exactly
-    if((this->arc_milestone[this->plane_axis_0]==target[this->plane_axis_0]) && (this->arc_milestone[this->plane_axis_1]==target[this->plane_axis_1])) {
+    if((this->machine_position[this->plane_axis_0]==target[this->plane_axis_0]) && (this->machine_position[this->plane_axis_1]==target[this->plane_axis_1])) {
         if (is_clockwise) { // set angular_travel to -2pi for a clockwise full circle
            angular_travel = (-2 * PI);
         } else { // set angular_travel to 2pi for a counterclockwise full circle
