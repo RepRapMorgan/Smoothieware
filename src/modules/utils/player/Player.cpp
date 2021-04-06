@@ -449,7 +449,11 @@ void Player::on_main_loop(void *argument)
                 }
 
                 struct SerialMessage message;
-                message.message.assign(buf, len-1); // we do not want to include the \n
+                if(buf[len-1] == '\n' || buf[len-1] == '\r') {
+                    message.message.assign(buf, len-1); // we do not want to include the \n
+                }else{
+                    message.message.assign(buf, len);
+                }
                 message.stream = this->current_stream == nullptr ? &(StreamOutput::NullStream) : this->current_stream;
 
                 // waits for the queue to have enough room
@@ -494,7 +498,7 @@ void Player::on_get_public_data(void *argument)
 
     } else if(pdr->second_element_is(get_progress_checksum)) {
         static struct pad_progress p;
-        if(file_size > 0 && playing_file) {
+        if(file_size > 0 && (playing_file || this->current_file_handler)) {
             p.elapsed_secs = this->elapsed_secs;
             float pcnt = (((float)file_size - (file_size - played_cnt)) * 100.0F) / file_size;
             p.percent_complete = roundf(pcnt);
