@@ -936,7 +936,7 @@ void Endstops::process_home_command(Gcode* gcode)
 
         if (haxis[X_AXIS] || haxis[Y_AXIS]){
             for (auto &p : homing_axis) {
-                if (haxis[p.axis_index] && (p.axis_index != Z_AXIS) { // if we requested this axis to home and not Z...
+                if (haxis[p.axis_index] && (p.axis_index != Z_AXIS)) { // if we requested this axis to home and not Z...
                     THEROBOT->reset_axis_position(p.homing_position + p.home_offset, p.axis_index);
                     // set flag indicating axis was homed, it stays set once set until H/W reset or unhomed
                     p.homed= true;
