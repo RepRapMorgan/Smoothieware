@@ -66,6 +66,10 @@ enum DEFNS {MIN_PIN, MAX_PIN, MAX_TRAVEL, FAST_RATE, SLOW_RATE, RETRACT, DIRECTI
 #define move_to_origin_checksum          CHECKSUM("move_to_origin_after_home")
 #define park_after_home_checksum         CHECKSUM("park_after_home")
 
+#define cubex_checksum                   CHECKSUM("cubex")
+#define set_x_checksum                   CHECKSUM("set_x")
+#define set_y_checksum                   CHECKSUM("set_y")
+
 #define alpha_trim_checksum              CHECKSUM("alpha_trim_mm")
 #define beta_trim_checksum               CHECKSUM("beta_trim_mm")
 #define gamma_trim_checksum              CHECKSUM("gamma_trim_mm")
@@ -384,6 +388,11 @@ void Endstops::get_global_configs()
     this->is_delta=  THEKERNEL->config->value(delta_homing_checksum)->by_default(false)->as_bool();
     this->is_rdelta= THEKERNEL->config->value(rdelta_homing_checksum)->by_default(false)->as_bool();
     this->is_scara=  THEKERNEL->config->value(scara_homing_checksum)->by_default(false)->as_bool();
+    this->is_cubex=  THEKERNEL->config->value(cubex_checksum)->by_default(false)->as_bool();
+
+    this->set_z_xy[0]= THEKERNEL->config->value(cubex_checksum,set_x_checksum)->by_default(0)->as_number();
+    this->set_z_xy[1]= THEKERNEL->config->value(cubex_checksum,set_y_checksum)->by_default(0)->as_number();    
+    
 
     this->home_z_first= THEKERNEL->config->value(home_z_first_checksum)->by_default(false)->as_bool();
 
@@ -715,9 +724,12 @@ void Endstops::home(axis_bitmap_t a)
         home_xyz();
     } else {
 
-        if(!home_z_first) home_xy();
+        if(!home_z_first || is_cubex) home_xy();
 
         if(axis_to_home[Z_AXIS]) {
+            //if(is_cubex) {  // system needs to be in a specific XY position for Z homing to work
+            //    f
+            //}
             // now home z
             float delta[3] {0, 0, homing_axis[Z_AXIS].max_travel}; // we go the max z
             if(homing_axis[Z_AXIS].home_direction) delta[Z_AXIS]= -delta[Z_AXIS];
@@ -884,7 +896,7 @@ void Endstops::process_home_command(Gcode* gcode)
     }
 
     // do the actual homing
-    if(homing_order != 0 && !is_scara) {
+    if(homing_order != 0 && !is_scara && !is_cubex) {
         // if an order has been specified do it in the specified order
         // homing order is 0bfffeeedddcccbbbaaa where aaa is 1,2,3,4,5,6 to specify the first axis (XYZABC), bbb is the second and ccc is the third etc
         // eg 0b0101011001010 would be Y X Z A, 011 010 001 100 101 would be  B A X Y Z
@@ -910,6 +922,64 @@ void Endstops::process_home_command(Gcode* gcode)
             // check if on_halt (eg kill)
             if(THEKERNEL->is_halted()) break;
         }
+
+    } else if(is_cubex) {
+        // Special case where Z only homes at a specific XY position
+        //THEKERNEL->streams->printf("WARNING: Cubex\n");
+        
+        for (uint32_t a = 0; a <= 1; a++) {
+            if(a < homing_axis.size() && haxis[a]) { // if axis is selected to home
+                axis_bitmap_t bs;
+                bs.set(a);
+                home(bs);
+            }
+            // check if on_halt (eg kill)
+            if(THEKERNEL->is_halted()) break;
+
+        }
+
+        if (haxis[X_AXIS] || haxis[Y_AXIS]){
+            for (auto &p : homing_axis) {
+                if (haxis[p.axis_index] && (p.axis_index != Z_AXIS) { // if we requested this axis to home and not Z...
+                    THEROBOT->reset_axis_position(p.homing_position + p.home_offset, p.axis_index);
+                    // set flag indicating axis was homed, it stays set once set until H/W reset or unhomed
+                    p.homed= true;
+                }
+            }
+
+            //haxis.reset();
+            //if (gcode->has_letter('Z'))
+            //    haxis.set(Z_AXIS);   // only do Z from here on...
+
+        }
+
+
+        // move to the set XY position
+
+        if (haxis[Z_AXIS]){
+            //THEKERNEL->streams->printf("WARNING: Cubex ZZZ\n");
+
+ 
+            char cmd[64];
+            // Assemble Gcode to add onto the queue
+            snprintf(cmd, sizeof(cmd), "G0 X%1.3f Y%1.3f F%1.1f", this->set_z_xy[0], this->set_z_xy[1], 6000.0); // use specified feedrate (mm/sec)
+        
+            Gcode gc(cmd, &(StreamOutput::NullStream));
+            THEROBOT->on_gcode_received(&gc); // send to robot directly
+
+            axis_bitmap_t bs;
+            bs.set(Z_AXIS);
+            //home(bs);
+
+
+        
+        }
+
+        
+        // check if on_halt (eg kill)
+        //if(THEKERNEL->is_halted()) break;*/
+
+       
 
     } else {
         // they could all home at the same time
@@ -987,7 +1057,7 @@ void Endstops::process_home_command(Gcode* gcode)
             }
         }
 
-    } else {
+    } else if (!is_cubex){
         // Zero the ax(i/e)s position, add in the home offset
         // NOTE that if compensation is active the Z will be set based on where XY are, so make sure XY are homed first then Z
         // so XY are at a known consistent position.  (especially true if using a proximity probe)
