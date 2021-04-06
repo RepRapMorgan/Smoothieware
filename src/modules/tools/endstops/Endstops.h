@@ -54,6 +54,8 @@ class Endstops : public Module{
 
         float trim_mm[3];
 
+        float set_z_xy[2];
+
         // per endstop settings
         using endstop_info_t = struct {
             Pin pin;
@@ -97,6 +99,7 @@ class Endstops : public Module{
             bool is_delta:1;
             bool is_rdelta:1;
             bool is_scara:1;
+            bool is_cubex:1;
             bool home_z_first:1;
             bool move_to_origin_after_home:1;
             bool park_after_home:1;
